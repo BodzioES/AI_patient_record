@@ -63,8 +63,10 @@ Zakres zrealizowany:
 - `LmStudioAiProvider` implementujący `AiProvider` (OpenAI-compatible
   `POST /v1/chat/completions`, bez streamingu),
 - wybór dostawcy przez `AI_PROVIDER=mock|lmstudio`, bez zmian w serwisach i UI,
-- reguły systemowe po polsku: brak diagnozy, brak zmian dawek, odesłanie do
-  lekarza, cytowanie danych z karty, objawy alarmowe → 112/SOR,
+- reguły systemowe po polsku: rola „wirtualnego lekarza” — wstępna interpretacja
+  wartości i prawdopodobne wyjaśnienia jako przypuszczenie, bez pewnej diagnozy,
+  bez zmian dawek, objawy alarmowe → 112/SOR, każda odpowiedź kończy się
+  zastrzeżeniem „to tylko przypuszczenia… skonsultuj z lekarzem lub specjalistą”,
 - budżet promptu (`AI_MAX_PROMPT_CHARS`) i przycinanie historii do okna kontekstu,
 - obsługa modeli rozumujących (`reasoning_effort`, pusty `content`, `finish_reason=length`),
 - analiza zdjęć przez model vision (base64 data URL) + jawna analiza metadanych,

@@ -14,7 +14,9 @@ do samodzielnego uruchomienia przez użytkownika.
 
 > To nie jest produkt medyczny. Zarówno mock, jak i prawdziwy model lokalny nie
 > zastępują lekarza. Model może się mylić — aplikacja zawsze pokazuje zastrzeżenie
-> medyczne, a prompt zabrania diagnozowania i zmiany dawek leków.
+> medyczne. Prompt pozwala na wstępną interpretację wyników (np. „145/95 mmHg to
+> podwyższone, norma poniżej 140/90”), ale zabrania stawiania rozpoznania i zmiany
+> dawek leków.
 
 ## 1. Technologie
 

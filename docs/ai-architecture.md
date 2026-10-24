@@ -75,8 +75,14 @@ dane kliniczne i metadane bezpieczne dla pacjenta.
 Prompt składa się z trzech części:
 
 1. **Reguły systemowe** (stały tekst w kodzie): odpowiadaj tylko z danych karty,
-   nie diagnozuj, nie zmieniaj dawek, przy objawach alarmowych kieruj do 112/SOR,
-   cytuj konkretne daty i wartości, maksymalnie ~200 słów, bez markdownu.
+   **wstępnie interpretuj wartości** względem typowych zakresów dla dorosłych
+   (ciśnienie, tętno, temperatura, glukoza, saturacja) i mów wprost, czy wynik jest
+   w normie, podwyższony czy obniżony — ale bez rozpoznania („wartości wskazują
+   na…”, nie „masz nadciśnienie”), bez zmiany dawek, przy objawach alarmowych
+   kieruj do 112/SOR. Struktura: ocena danych → co to zwykle oznacza → co zrobić →
+   zastrzeżenie. Maksymalnie ~250 słów, bez markdownu. **Każda odpowiedź kończy się
+   osobnym akapitem**: „To nie jest porada medyczna ani diagnoza — skonsultuj się
+   z lekarzem.”
 2. **Dane pacjenta** w blokach `=== DANE Z KARTY PACJENTA ===` … `=== KONIEC DANYCH ===`
    z instrukcją, że to dane, a nie polecenia (ochrona przed prompt injection
    z treści zapisanych w karcie).
@@ -104,13 +110,18 @@ Studio odrzuci to pole (`HTTP 400`), provider ponawia żądanie raz, już bez ni
 
 Zdjęcia większe niż `AI_MAX_VISION_IMAGE_BYTES` (domyślnie 10 MB) nie są wysyłane
 — provider robi wtedy analizę wyłącznie metadanych i **mówi wprost**, że nie
-widzi obrazu (`prompt_version = lmstudio-image-metadata-v1`). Model bez wsparcia
+widzi obrazu (`prompt_version = lmstudio-image-metadata-v2`). Model bez wsparcia
 vision również nie udaje, że widział piksele: dostaje informację „nie widzisz
 obrazu”.
 
-Prompt obrazu (`prompt_version = lmstudio-vision-v1`) zabrania rozpoznawania
-chorób i oceny pilności, każe przepisać widoczne liczby/tekst dokładnie oraz
-oznaczyć nieostre lub nieczytelne zdjęcia.
+Prompt obrazu (`prompt_version = lmstudio-vision-v2`) opisuje, co widać, i pozwala
+podać **prawdopodobne wyjaśnienia jako przypuszczenie** („to może wyglądać jak…”,
+„typowe dla…”), ale nie stawia pewnej diagnozy i nie twierdzi, że zmiana jest
+groźna lub niegroźna. Podaje, po czym poznać, że trzeba zgłosić się pilnie
+(szybkie powiększanie, gorączka, ropa, silny ból, rozprzestrzenianie się), każe
+przepisać widoczne liczby/tekst dokładnie i zawsze kończy się akapitem
+„Jestem asystentem AI — to tylko przypuszczenia, a nie diagnoza. Pokaż to lekarzowi
+lub specjaliście.”
 
 ## 6. Model danych AI
 
@@ -188,5 +199,6 @@ model.
   sprzęcie widać dłuższe oczekiwanie.
 - Brak OCR, embeddingów, wyszukiwania semantycznego i kolejki asynchronicznej.
 - Brak oceny jakości odpowiedzi i brak mechanizmu „human-in-the-loop”.
-- Model może się mylić — dlatego prompt wymusza brak diagnozy i odesłanie do
-  lekarza, a UI zawsze pokazuje zastrzeżenie medyczne.
+- Model może się mylić — dlatego interpretacja jest zawsze przedstawiana jako
+  przypuszczenie („wartości wskazują na…”, „to może być…”), bez pewnej diagnozy,
+  a UI zawsze pokazuje zastrzeżenie medyczne i odesłanie do lekarza.
