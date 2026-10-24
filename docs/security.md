@@ -51,6 +51,22 @@ Warstwa prawna i audyt bezpieczeństwa nie są częścią ETAPU 1.
   `openssl rand -base64 48`.
 - Sekretu nie wolno commitować; `.env` jest w `.gitignore`.
 
+### Aplikacja Android (ETAP 2)
+
+- Access i refresh token oraz adres serwera są szyfrowane AES-GCM kluczem 256-bit
+  przechowywanym w Android Keystore (alias `patient_card_session_aes`).
+- Brak plaintextu tokenów w SharedPreferences i w logach.
+- `allowBackup=false` — dane aplikacji nie trafiają do backupu systemowego.
+- Zmiana adresu serwera czyści tokeny; nie ma możliwości wysłania tokenu z jednego
+  serwera do drugiego.
+- Nieudany refresh lub `401` czyści sesję i wymusza ponowne logowanie.
+- HTTP (cleartext) jest dozwolony tylko dla prywatnej sieci deweloperskiej; konfiguracja
+  jest w `network_security_config.xml`. Publiczne wdrożenie wymaga HTTPS (ETAP 6).
+- Logowanie OkHttp w debugowaniu używa poziomu `BASIC` — bez treści żądań i odpowiedzi.
+- Pliki wybierane są przez SAF; aplikacja nie prosi o dostęp do całej pamięci.
+  Pobrane pliki trafiają do `cacheDir` i są udostępniane przez `FileProvider`.
+- Asystent AI i analiza zdjęcia są jawnie oznaczone jako MOCK.
+
 ## 3. Autoryzacja
 
 - `UserPrincipal` powstaje wyłącznie z podpisanego JWT.

@@ -1,6 +1,6 @@
 # Architektura
 
-## 1. Cel i zakres ETAPU 1
+## 1. Cel i zakres
 
 Backend prywatnej karty pacjenta działający lokalnie na PC:
 
@@ -11,12 +11,14 @@ Backend prywatnej karty pacjenta działający lokalnie na PC:
 - wspólne uwierzytelnianie i autoryzacja,
 - AI na tym etapie wyłącznie jako szkielet z `MockAiProvider`.
 
-Aplikacja Android, LM Studio i analiza obrazów nie są częścią tego etapu.
+Aplikacja Android (ETAP 2) jest klientem tego API: Compose, Retrofit/OkHttp,
+bezpieczna sesja w Android Keystore. LM Studio i rzeczywista analiza obrazów nie są
+częścią ETAPU 2 — przewidziane na ETAP 4/5.
 
 ## 2. Kontekst systemu
 
 ```
-Telefon Android (ETAP 2)
+Telefon Android (Compose, ETAP 2)
         |
         | HTTPS/HTTP w prywatnej sieci Wi-Fi, Bearer JWT
         v

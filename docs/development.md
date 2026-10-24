@@ -6,8 +6,11 @@
   `C:\Program Files\Android\Android Studio\jbr`).
 - Gradle nie musi być zainstalowany — używamy wrappera `backend/gradlew.bat`.
 - PostgreSQL 16: Docker Desktop albo lokalna instalacja.
+- Docker Desktop na Windows wymaga **WSL 2** (`wsl --install --no-distribution`
+  w PowerShellu jako administrator + restart). Bez tego silnik nie startuje:
+  `engine linux/wsl failed to start: wsl is not installed`.
 - PowerShell lub terminal Linux/macOS.
-- Opcjonalnie: Android Studio (ETAP 2).
+- Opcjonalnie: Android Studio — do pracy nad aplikacją Android (ETAP 2 ukończony).
 
 Sprawdzenie JDK:
 
@@ -42,17 +45,23 @@ $env:STORAGE_ROOT = "C:\Users\Student\AndroidStudioProjects\AR_PROJECT_1\storage
 
 ## 3. Baza danych
 
-### Docker Compose
+### Docker Compose (baza + backend)
 
 ```powershell
 cd C:\Users\Student\AndroidStudioProjects\AR_PROJECT_1
-docker compose up -d
+Copy-Item .env.example .env   # ustaw POSTGRES_PASSWORD i JWT_SECRET
+docker compose up -d --build
 docker compose ps
 ```
 
-PostgreSQL jest wystawiony tylko na `127.0.0.1:5432`. Dane przetrwają w wolumenie
-`patientcard_pgdata`. Zatrzymanie: `docker compose down` (bez `-v`, aby nie
-usuwać danych).
+- `patientcard-postgres` — PostgreSQL 16, tylko `127.0.0.1:5432`, dane w wolumenie
+  `patientcard_pgdata`.
+- `patientcard-backend` — obraz z `backend/Dockerfile` (Gradle 8.14.3 + JDK 17 →
+  JRE 17 Alpine), port `8080`, pliki w wolumenie `patientcard_storage`.
+
+Zatrzymanie: `docker compose down` (bez `-v`, aby nie usuwać danych).
+Samą bazę bez backendu uruchomisz przez `docker compose up -d postgres`, a backend
+wtedy z Gradle (sekcja 4).
 
 ### Bez Dockera
 
@@ -129,6 +138,28 @@ Pojedyncza klasa:
 ```powershell
 .\gradlew.bat test --tests "com.patientcard.AuthIntegrationTest"
 ```
+
+### 5.1. Aplikacja Android
+
+Build i testy jednostkowe JVM (nie wymagają emulatora):
+
+```powershell
+cd C:\Users\Student\AndroidStudioProjects\AR_PROJECT_1
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+.\gradlew.bat :app:assembleDebug :app:testDebugUnitTest
+```
+
+Instalacja na emulatorze/telefonie:
+
+```powershell
+.\gradlew.bat :app:installDebug
+```
+
+- APK: `app/build/outputs/apk/debug/app-debug.apk`
+- raport: `app/build/reports/tests/testDebugUnitTest/index.html`
+- szczegóły: [`android.md`](android.md)
+- testy instrumentowane (`app/src/androidTest`) wymagają urządzenia i nie są częścią
+  powyższego polecenia.
 
 ## 6. Struktura backendu
 
@@ -224,7 +255,7 @@ Sprawdź, że nie ma tam `.env`, `local.properties`, buildów ani plików medycz
 Dopiero potem:
 
 ```bash
-git commit -m "ETAP 1: backend karty pacjenta, PostgreSQL, auth i API AI (mock)"
+git commit -m "ETAP 1-2: backend karty pacjenta oraz aplikacja Android Compose"
 git remote add origin https://github.com/TWOJ_LOGIN/TWOJE_REPO.git
 git push -u origin main
 ```
@@ -253,4 +284,6 @@ Nie commituj prawdziwych danych medycznych, sekretów, tokenów ani haseł.
 - `git`, `docker` i systemowy `psql` nie były dostępne, więc push na GitHub oraz
   live start przez Docker Compose nie zostały wykonane w tej sesji.
 - Testy użyły prawdziwego PostgreSQL embedded, nie mocka bazy.
-- Android nie jest częścią ETAPU 1.
+- Aplikacja Android została zbudowana i przetestowana jednostkowo (28 testów JVM), ale
+  nie była uruchamiana na emulatorze/telefonie w tym środowisku.
+- Rzeczywisty model AI nie był podłączany — działa `MockAiProvider`.

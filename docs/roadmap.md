@@ -11,29 +11,33 @@
 - API AI: rozmowy, historia, źródła, analiza zdjęcia jako jawny mock,
 - OpenAPI/Swagger, Actuator health, dokumentacja, testy integracyjne.
 
-**Status:** zakończony i zgłoszony do akceptacji. ETAP 2 nie został rozpoczęty.
+**Status:** zakończony i zgłoszony do akceptacji. ETAP 2 zrealizowany w kolejnym kroku.
 
-## ETAP 2 — aplikacja Android (następny, po akceptacji)
+## ETAP 2 — aplikacja Android (ukończony)
 
 Cel: minimalny, użyteczny klient prywatnej karty pacjenta.
 
-- nowy moduł aplikacji Compose (lub wydzielenie obecnego szablonu),
+- aplikacja Compose w istniejącym module `app/` (Material 3, Navigation Compose),
 - ekran logowania i rejestracji,
-- bezpieczne przechowywanie tokenów (EncryptedSharedPreferences / DataStore),
-- klient HTTP (Retrofit + kotlinx.serialization lub Ktor),
+- bezpieczne przechowywanie tokenów: AES-GCM + klucz w Android Keystore,
+- klient HTTP: Retrofit + Gson + OkHttp,
 - automatyczne odświeżanie access tokenu i wylogowanie przy `401`,
+- konfigurowalny adres backendu (bez hardkodowania IP), czyszczenie sesji przy zmianie,
 - profil pacjenta: podgląd i edycja,
-- listy: alergie, schorzenia, leki, objawy, pomiary, wizyty, lekarze,
-- dodawanie/edycja/usuwanie podstawowych rekordów,
-- upload zdjęcia i dokumentu z telefonu, podgląd/pobranie,
+- listy i formularze: alergie, schorzenia, leki, objawy, pomiary, wizyty, lekarze,
+- upload dokumentów i zdjęć przez SAF, pobieranie i otwieranie przez FileProvider,
+- podgląd zdjęcia i analiza w trybie MOCK,
+- czat asystenta w trybie MOCK z historią i źródłami,
 - obsługa błędów sieci i komunikaty po polsku,
-- prosta nawigacja i stany ładowania/pustki,
-- konfiguracja adresu backendu w prywatnej sieci Wi-Fi (bez hardkodowania IP),
-- testy jednostkowe logiki i podstawowe testy UI.
+- nawigacja, stany ładowania, puste i błędu,
+- 28 testów jednostkowych JVM, build `assembleDebug` zakończony sukcesem.
 
-Poza zakresem ETAPU 2: rzeczywiste AI, OCR, powiadomienia, tryb offline.
+Poza zakresem ETAPU 2 (zrealizowane później lub świadomie pominięte): rzeczywiste AI,
+OCR, powiadomienia, tryb offline, paginacja UI, testy instrumentowane.
 
-## ETAP 3 — dopracowanie doświadczenia pacjenta
+**Status:** zakończony. Szczegóły: [`android.md`](android.md).
+
+## ETAP 3 — dopracowanie doświadczenia pacjenta (następny)
 
 Kandydaci (do potwierdzenia):
 
@@ -43,9 +47,12 @@ Kandydaci (do potwierdzenia):
 - lepsze zarządzanie zdjęciami i seriami,
 - eksport danych do PDF/CSV,
 - motyw, dostępność, tryb ciemny,
+- paginacja i sortowanie list,
 - testy instrumentowane i CI.
 
 ## ETAP 4 — lokalny model AI (LM Studio)
+
+> **Tu będzie potrzebny rzeczywisty model AI.** ETAPY 2–3 nie wymagają modelu.
 
 - `LmStudioAiProvider` implementujący `AiProvider`,
 - OpenAI-compatible API, konfigurowalny URL/model, timeouty,

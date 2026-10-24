@@ -4,12 +4,14 @@ Projekt studencki: prywatna karta pacjenta z lokalnym asystentem AI. Telefon And
 łączy się z backendem na PC w prywatnej sieci Wi-Fi. Dane medyczne, pliki i model AI
 pozostają lokalnie.
 
-**Aktualny stan: ETAP 1 ukończony** — backend Spring Boot, PostgreSQL, Flyway,
-logowanie JWT + refresh tokeny, API aplikacji, upload/pobieranie plików, szkielet API AI
-z `MockAiProvider`, dokumentacja i testy integracyjne na prawdziwym PostgreSQL.
+**Aktualny stan: ETAP 2 ukończony** — backend Spring Boot z ETAPU 1 oraz aplikacja
+Android (Jetpack Compose) z logowaniem, konfigurowalnym adresem backendu, profilem
+pacjenta, CRUD wszystkich sekcji medycznych, uploadem/pobieraniem dokumentów i zdjęć,
+historią rozmów asystenta oraz jawnym trybem MOCK AI.
 
-> To nie jest produkt medyczny. Mock AI nie wykonuje analizy obrazu ani nie udziela
-> porad medycznych.
+> To nie jest produkt medyczny. Mock AI nie wykonuje rzeczywistej analizy obrazu ani nie
+> udziela porad medycznych. Rzeczywisty model AI (np. LM Studio) zostanie podłączony
+> w ETAPIE 4.
 
 ## 1. Technologie
 
@@ -22,7 +24,7 @@ z `MockAiProvider`, dokumentacja i testy integracyjne na prawdziwym PostgreSQL.
 | Dokumentacja API | springdoc-openapi 2.8.13 (Swagger UI) |
 | Tokeny | JWT HS256 (jjwt 0.12.6) + rotowane refresh tokeny |
 | Testy | JUnit 5, Spring Boot Test, MockMvc, MockK, embedded PostgreSQL (zonky) |
-| Android | istniejący szablon Compose — implementacja w ETAPIE 2 |
+| Android | Kotlin 2.0.21, Jetpack Compose (Material 3), Navigation Compose, ViewModel, Retrofit + Gson, OkHttp, coroutines, Android Keystore |
 
 Wersje są zapisane w `backend/build.gradle.kts` i `backend/gradle/wrapper/gradle-wrapper.properties`.
 
@@ -44,9 +46,13 @@ Wersje są zapisane w `backend/build.gradle.kts` i `backend/gradle/wrapper/gradl
       application.yml application-dev.yml
     src/test/kotlin/com/patientcard/
     build.gradle.kts
-  android/                     # planowane w ETAPIE 2 (obecnie szablon w /app)
-  app/                         # istniejący szablon Android Studio
-  docs/                        # architektura, baza, API, AI, bezpieczeństwo, roadmapa
+  app/                         # aplikacja Android (Compose) — ETAP 2
+    src/main/java/com/example/ar_project_1/
+      data/                    # modele, API, sesja, repozytorium, upload, katalog formularzy
+      ui/                      # auth, setup, home, profil, zasoby, dokumenty, zdjęcia, asystent, ustawienia
+      AppContainer.kt          # ręczne wstrzykiwanie zależności
+    src/test/                  # testy jednostkowe JVM
+  docs/                        # architektura, baza, API, AI, bezpieczeństwo, Android, roadmapa
   storage/                     # lokalne pliki (poza git, tylko .gitkeep)
   docker-compose.yml
   .env.example
@@ -64,18 +70,33 @@ go z buildem Androida.
 - PostgreSQL 16 (Docker Compose albo lokalna instalacja)
 - opcjonalnie Docker Desktop
 
-### 3.1. Baza danych przez Docker Compose
+### 3.1. Wariant A (zalecany): baza + backend w Dockerze
 
-```bash
-cp .env.example .env
-# zmień POSTGRES_PASSWORD i JWT_SECRET
-docker compose up -d
+```powershell
+cd C:\Users\Student\AndroidStudioProjects\AR_PROJECT_1
+Copy-Item .env.example .env
+# zmień POSTGRES_PASSWORD i JWT_SECRET w .env
+docker compose up -d --build
 docker compose ps
 ```
 
-Baza jest wystawiona wyłącznie na `127.0.0.1:5432`.
+Compose buduje obraz z `backend/Dockerfile` i uruchamia dwa kontenery:
 
-### 3.2. Start backendu
+- `patientcard-postgres` — PostgreSQL 16, wystawiony tylko na `127.0.0.1:5432`,
+- `patientcard-backend` — Spring Boot na porcie `8080`, pliki w wolumenie
+  `patientcard_storage`.
+
+Pierwszy build trwa kilka minut (pobiera zależności Gradle). Gotowość sprawdzisz na
+`http://localhost:8080/actuator/health` → `{"status":"UP"}`.
+
+```powershell
+docker compose logs -f backend   # logi backendu
+docker compose down              # stop (dane w wolumenach zostają)
+```
+
+Wymagany jest Docker Desktop z działającym silnikiem (na Windows: WSL 2).
+
+### 3.2. Wariant B: backend lokalnie z Gradle
 
 Windows PowerShell:
 
@@ -140,7 +161,54 @@ Stan na tej sesji: **15 testów, 0 błędów**. Pełny build:
 
 Raport HTML: `backend/build/reports/tests/test/index.html`.
 
-## 5. API — skrót
+### 4.1. Android — build i testy jednostkowe
+
+```powershell
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+.\gradlew.bat :app:assembleDebug :app:testDebugUnitTest
+```
+
+Stan na tej sesji: **28 testów JVM, 0 błędów**, `BUILD SUCCESSFUL`.
+APK debug: `app/build/outputs/apk/debug/app-debug.apk`.
+Raport: `app/build/reports/tests/testDebugUnitTest/index.html`.
+
+Testy obejmują normalizację adresu serwera, parser błędów API, konwersję dat oraz
+budowanie i walidację żądań CRUD. Testy instrumentowane (`app/src/androidTest`) wymagają
+emulatora lub telefonu i nie były uruchamiane w tym środowisku.
+
+## 5. Aplikacja Android (ETAP 2)
+
+### 5.1. Funkcje
+
+- konfiguracja adresu backendu przy pierwszym uruchomieniu (bez hardkodowanego IP),
+- logowanie i rejestracja, automatyczne odświeżanie tokenu przy `401`,
+- szyfrowanie tokenów i adresu serwera kluczem AES-GCM z Android Keystore,
+- profil pacjenta: podgląd i edycja,
+- listy i formularze: alergie, schorzenia, leki, objawy, pomiary, lekarze, wizyty,
+- dokumenty: upload (PDF/JPG/PNG), pobranie i otwarcie, usuwanie,
+- zdjęcia: upload, podgląd w aplikacji, usuwanie, analiza MOCK,
+- asystent AI: czat MOCK, historia rozmów, źródła, wyraźne oznaczenie MOCK,
+- ustawienia: zmiana serwera, wylogowanie, czyszczenie pamięci podręcznej,
+- komunikaty błędów po polsku, stany ładowania i puste.
+
+### 5.2. Uruchomienie
+
+1. Uruchom backend na PC (sekcja 3.1 — Docker — albo 3.2 — Gradle).
+2. Sprawdź adres PC w sieci Wi-Fi: `ipconfig` (np. `192.168.1.10`).
+3. Zbuduj i zainstaluj APK:
+
+```powershell
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+.\gradlew.bat :app:installDebug
+```
+
+4. W aplikacji podaj `http://192.168.1.10:8080` (emulator: `http://10.0.2.2:8080`).
+5. Telefon i PC muszą być w tej samej sieci. Backend musi nasłuchiwać na interfejsie
+   sieciowym, nie tylko `localhost`.
+
+Szczegóły implementacji i ograniczenia: [`docs/android.md`](docs/android.md).
+
+## 6. API — skrót
 
 Wszystkie endpointy poza rejestracją, logowaniem, refresh, logout, Swaggerem i
 health wymagają `Authorization: Bearer <accessToken>`.
@@ -176,7 +244,7 @@ Pliki: `POST` multipart, `GET /{id}/file`, `DELETE`.
 
 Pełna lista i przykłady: [`docs/api.md`](docs/api.md).
 
-## 6. Bezpieczeństwo (minimum)
+## 7. Bezpieczeństwo (minimum)
 
 - hasła: BCrypt (strength 12), nigdy nie zwracane,
 - access JWT 15 min, refresh 30 dni, tylko hash refresh tokenu w bazie,
@@ -186,11 +254,13 @@ Pełna lista i przykłady: [`docs/api.md`](docs/api.md).
 - pliki poza katalogiem statycznym, serwowane kontrolowanie,
 - walidacja rozszerzenia, MIME i sygnatury pliku, limit 25 MB,
 - `storage_key` generowany serwerowo, ochrona przed path traversal,
-- centralna obsługa błędów, bez stack trace'ów i bez danych medycznych w logach.
+- centralna obsługa błędów, bez stack trace'ów i bez danych medycznych w logach,
+- Android: tokeny i adres serwera szyfrowane AES-GCM kluczem w Android Keystore,
+  brak backupu danych aplikacji, `allowBackup=false`, po zmianie serwera sesja jest czyszczona.
 
 Szczegóły i ograniczenia: [`docs/security.md`](docs/security.md).
 
-## 7. Dokumentacja
+## 8. Dokumentacja
 
 - [`docs/architecture.md`](docs/architecture.md)
 - [`docs/database.md`](docs/database.md)
@@ -200,8 +270,9 @@ Szczegóły i ograniczenia: [`docs/security.md`](docs/security.md).
 - [`docs/security.md`](docs/security.md)
 - [`docs/development.md`](docs/development.md)
 - [`docs/roadmap.md`](docs/roadmap.md)
+- [`docs/android.md`](docs/android.md)
 
-## 8. Podłączenie do nowego repozytorium GitHub
+## 9. Podłączenie do nowego repozytorium GitHub
 
 Git nie jest zainstalowany w środowisku, w którym powstał projekt. Na swoim PC:
 
@@ -210,7 +281,7 @@ cd C:\Users\Student\AndroidStudioProjects\AR_PROJECT_1
 git init
 git branch -M main
 git add .
-git commit -m "ETAP 1: backend karty pacjenta, PostgreSQL, auth i API AI (mock)"
+git commit -m "ETAP 1-2: backend karty pacjenta oraz aplikacja Android Compose"
 git remote add origin https://github.com/TWOJ_LOGIN/TWOJE_REPO.git
 git push -u origin main
 ```
@@ -227,20 +298,26 @@ albo (świadomie, tylko dla pustego repo) `git push --force -u origin main`.
 `.gitkeep`) oraz klucze. Przed commitem sprawdź `git status` i nigdy nie dodawaj
 prawdziwych danych medycznych.
 
-## 9. Znane ograniczenia ETAPU 1
+## 10. Znane ograniczenia ETAPU 2
 
-- brak rzeczywistego modelu AI — `MockAiProvider` jawnie oznacza odpowiedzi,
-- brak OCR i analizy obrazu,
-- `width_px` / `height_px` nie są jeszcze odczytywane z plików,
-- brak aplikacji Android (ETAP 2),
+- brak rzeczywistego modelu AI — `MockAiProvider` jawnie oznacza odpowiedzi; czat i
+  analiza zdjęcia w aplikacji są oznaczone jako MOCK,
+- brak OCR i rzeczywistej analizy obrazu,
+- brak trybu offline i powiadomień,
+- brak testów instrumentowanych UI uruchomionych na emulatorze/telefonie,
+- `width_px` / `height_px` zdjęć nadal nie są odczytywane z plików po stronie backendu,
+- lista rekordów pobiera pierwsze 100 pozycji bez paginacji w UI,
 - brak automatycznego czyszczenia osieroconych plików po awarii dysku,
 - access token pozostaje ważny do wygaśnięcia po logout (refresh jest revokowany),
 - brak rate limitingu i 2FA,
-- Docker/PostgreSQL nie były dostępne w środowisku budowania; uruchomienie
-  backendu z Dockerem nie zostało tu przetestowane, natomiast testy użyły
-  prawdziwego PostgreSQL embedded.
+- Docker/PostgreSQL nie były dostępne w środowisku budowania; uruchomienie backendu z
+  Dockerem nie zostało tu przetestowane, natomiast testy użyły prawdziwego PostgreSQL
+  embedded,
+- `git` nie jest dostępny w środowisku — commit i push wykonuje użytkownik.
 
-## 10. Następny etap
+## 11. Następny etap
 
-ETAP 2: aplikacja Android (Compose, logowanie, klient API, profil, listy, upload,
-obsługa błędów sieci). **Nie rozpoczęty — czeka na akceptację.**
+ETAP 3: dopracowanie doświadczenia pacjenta (chronologia, filtry, wykresy, eksport,
+dostępność, testy UI/CI). ETAP 4: podłączenie lokalnego modelu AI (LM Studio,
+`LmStudioAiProvider`). **Rzeczywisty model AI nie jest jeszcze potrzebny — będzie
+wymagany dopiero na początku ETAPU 4.**

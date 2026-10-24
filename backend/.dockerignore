@@ -1,0 +1,7 @@
+# Nie kopiuj do obrazu artefaktów lokalnego builda ani plików IDE.
+.gradle
+.kotlin
+build
+*.log
+*.iml
+.idea
