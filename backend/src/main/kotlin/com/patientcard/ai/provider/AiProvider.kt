@@ -53,8 +53,9 @@ data class AiImageAnswer(
 )
 
 /**
- * Abstraction over the local model runtime. ETAP 1 uses MockAiProvider only.
- * A future LM Studio implementation must not change business logic in services.
+ * Abstraction over the local model runtime. Two implementations exist:
+ * [MockAiProvider] (default, demo data) and [LmStudioAiProvider] (real model via
+ * LM Studio, `app.ai.provider=lmstudio`). Services must not depend on either one.
  */
 interface AiProvider {
     val name: String

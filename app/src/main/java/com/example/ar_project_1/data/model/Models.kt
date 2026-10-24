@@ -116,6 +116,13 @@ data class AiSourceDto(
     val relevanceDescription: String? = null,
 )
 
+data class AiStatusDto(
+    val mock: Boolean = true,
+    val modelName: String = "",
+    val modelVersion: String? = null,
+    val notice: String = "",
+)
+
 data class ChatResponse(
     val conversationId: String = "",
     val userMessageId: String = "",
@@ -151,6 +158,26 @@ data class ConversationDetailDto(
     val createdAt: String? = null,
     val updatedAt: String? = null,
     val messages: List<MessageDto> = emptyList(),
+)
+
+/** Jedno zdarzenie wspólnej chronologii pacjenta. */
+data class TimelineEventDto(
+    val id: String = "",
+    val type: String = "",
+    val occurredAt: String? = null,
+    val title: String = "",
+    val subtitle: String? = null,
+    val status: String? = null,
+    val resourceId: String = "",
+)
+
+/** Trafienie wyszukiwania w całej karcie pacjenta. */
+data class SearchHitDto(
+    val id: String = "",
+    val type: String = "",
+    val title: String = "",
+    val subtitle: String? = null,
+    val occurredAt: String? = null,
 )
 
 data class ApiProblem(

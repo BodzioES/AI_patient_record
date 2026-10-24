@@ -106,6 +106,18 @@ class AiChatService(
     }
 
     @Transactional(readOnly = true)
+    fun status(): AiStatusResponse = AiStatusResponse(
+        mock = provider.isMock(),
+        modelName = provider.name,
+        modelVersion = provider.version,
+        notice = if (provider.isMock()) {
+            "Tryb demonstracyjny (MOCK): odpowiedzi nie pochodzą z modelu językowego."
+        } else {
+            "Odpowiedzi generuje model lokalny ${provider.name}. To nie jest porada medyczna."
+        },
+    )
+
+    @Transactional(readOnly = true)
     fun listConversations(principal: UserPrincipal, pageable: Pageable): PageResponse<ConversationResponse> {
         val patientId = currentPatientService.patientId(principal)
         val page = conversationRepository.findAllByPatientId(patientId, pageable)

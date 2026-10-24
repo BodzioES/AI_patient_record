@@ -339,6 +339,83 @@ nowy rekord, nie nadpisanie historii.
 `source`: `MANUAL`, `DEVICE`, `IMPORTED`, `UNKNOWN`.
 Dla ciśnienia `value` = skurczowe, `secondaryValue` = rozkurczowe.
 
+### 4.9. Chronologia — `GET /api/v1/app/timeline`
+
+Scala zdarzenia z sześciu sekcji (wizyty, pomiary, objawy, leki, dokumenty, zdjęcia)
+w jedną listę sortowaną malejąco po dacie zdarzenia.
+
+| Parametr | Domyślnie | Opis |
+|---|---|---|
+| `from` | brak | dolna granica czasu (ISO-8601, np. `2026-01-01T00:00:00Z`) |
+| `to` | brak | górna granica czasu (ISO-8601) |
+| `types` | wszystkie | lista typów, np. `types=MEASUREMENT&types=SYMPTOM` |
+| `page` | `0` | numer strony |
+| `size` | `20` | rozmiar strony, maks. 100 |
+
+Typy: `APPOINTMENT`, `MEASUREMENT`, `SYMPTOM`, `MEDICATION`, `DOCUMENT`, `IMAGE`.
+Z każdego źródła brane jest maks. 200 najnowszych pozycji, potem wynik jest scalany.
+
+```json
+{
+  "content": [
+    {
+      "id": "6a1f...",
+      "type": "MEASUREMENT",
+      "occurredAt": "2026-01-10T07:30:00Z",
+      "title": "Ciśnienie: 130/85 mmHg",
+      "subtitle": null,
+      "status": null,
+      "resourceId": "6a1f..."
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1,
+  "first": true,
+  "last": true
+}
+```
+
+`occurredAt` to data medyczna zdarzenia (termin wizyty, data pomiaru, data
+obserwacji), a nie moment dodania wpisu.
+
+### 4.10. Wyszukiwanie — `GET /api/v1/app/search`
+
+| Parametr | Domyślnie | Opis |
+|---|---|---|
+| `q` | `""` | fraza; krótsza niż 2 znaki zwraca pusty wynik |
+| `page` | `0` | numer strony |
+| `size` | `20` | rozmiar strony, maks. 50 |
+
+Przeszukiwane sekcje: alergie, schorzenia, leki, objawy, pomiary, lekarze, wizyty,
+dokumenty, zdjęcia. Każda sekcja zwraca maks. 10 trafień; wyniki są sortowane
+najpierw po dopasowaniu w tytule, potem od najnowszych.
+
+```json
+{
+  "content": [
+    {
+      "id": "b7c2...",
+      "type": "ALLERGY",
+      "title": "Penicylina",
+      "subtitle": "wysypka • alergia",
+      "occurredAt": "2025-11-02T18:10:00Z"
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1,
+  "first": true,
+  "last": true
+}
+```
+
+Typy trafień: `ALLERGY`, `CONDITION`, `MEDICATION`, `SYMPTOM`, `MEASUREMENT`,
+`DOCTOR`, `APPOINTMENT`, `DOCUMENT`, `IMAGE`. Wyszukiwanie używa `LIKE` na
+`lower(...)`, więc nie wymaga dodatkowych indeksów pełnotekstowych.
+
 ## 5. Dokumenty — `/api/v1/app/documents`
 
 | Metoda | Ścieżka | Opis |
@@ -414,8 +491,23 @@ curl -X POST http://localhost:8080/api/v1/app/images \
 
 ## 7. AI — `/api/v1/ai`
 
-> ETAP 1 używa wyłącznie `MockAiProvider`. Odpowiedzi zawierają `mock: true`
-> oraz jawne oznaczenie „MOCK”. Nie jest to analiza medyczna.
+> Domyślnie działa `MockAiProvider` (`mock: true`, jawne „MOCK”). Po ustawieniu
+> `AI_PROVIDER=lmstudio` odpowiedzi generuje model lokalny z LM Studio
+> (`mock: false`, `modelName` = identyfikator modelu). W obu trybach treść nie
+> jest diagnozą ani poradą medyczną.
+
+### `GET /status` — 200
+
+Informuje, który dostawca jest aktywny. Aplikacja używa tego do etykiet w UI.
+
+```json
+{
+  "mock": false,
+  "modelName": "google/gemma-4-26b-a4b-qat",
+  "modelVersion": null,
+  "notice": "Odpowiedzi generuje model lokalny google/gemma-4-26b-a4b-qat. To nie jest porada medyczna."
+}
+```
 
 ### `POST /chat` — 200
 

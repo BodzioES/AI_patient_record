@@ -16,8 +16,16 @@ class UiPreferences(context: Context) {
             prefs.edit().putBoolean(KEY_WELCOME_SEEN, value).apply()
         }
 
+    /** Skala tekstu wybrana w Ustawieniach (1.0 = domyślna). */
+    var textScale: Float
+        get() = prefs.getFloat(KEY_TEXT_SCALE, 1.0f)
+        set(value) {
+            prefs.edit().putFloat(KEY_TEXT_SCALE, value.coerceIn(0.9f, 1.4f)).apply()
+        }
+
     private companion object {
         const val PREFS_NAME = "ui_preferences"
         const val KEY_WELCOME_SEEN = "welcome_seen"
+        const val KEY_TEXT_SCALE = "text_scale"
     }
 }

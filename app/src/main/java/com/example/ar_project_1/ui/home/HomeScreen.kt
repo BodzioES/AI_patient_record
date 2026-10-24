@@ -35,6 +35,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,10 +54,17 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.ar_project_1.AppContainer
 import com.example.ar_project_1.data.model.PatientDto
+import com.example.ar_project_1.data.model.TimelineEventDto
+import com.example.ar_project_1.data.resource.DateInputs
 import com.example.ar_project_1.data.resource.ResourceCatalog
 import com.example.ar_project_1.data.resource.ResourceType
 import com.example.ar_project_1.ui.common.ErrorBanner
 import com.example.ar_project_1.ui.common.LoadingBox
+import com.example.ar_project_1.ui.common.LocalAiStatus
+import com.example.ar_project_1.ui.common.aiIsMock
+import com.example.ar_project_1.ui.common.aiModeLabel
+import com.example.ar_project_1.ui.timeline.iconFor as timelineIcon
+import com.example.ar_project_1.ui.timeline.typeLabel as timelineTypeLabel
 import java.time.LocalDate
 import java.time.Period
 
@@ -68,6 +76,8 @@ fun HomeScreen(
     onDocuments: () -> Unit,
     onImages: () -> Unit,
     onAssistant: () -> Unit,
+    onTimeline: () -> Unit,
+    onCharts: () -> Unit,
 ) {
     val viewModel: HomeViewModel = viewModel(
         factory = viewModelFactory {
@@ -76,6 +86,8 @@ fun HomeScreen(
     )
     LaunchedEffect(Unit) { viewModel.load() }
     val state = viewModel.state.value
+    val aiStatus = LocalAiStatus.current
+    val aiMock = aiIsMock(aiStatus)
     var privacyDismissed by rememberSaveable { mutableStateOf(false) }
 
     if (state.loading && state.patient == null) {
@@ -130,6 +142,43 @@ fun HomeScreen(
                 if (row.size == 1) Spacer(Modifier.weight(1f))
             }
         }
+        if (state.timeline.isNotEmpty()) {
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "Ostatnia aktywność",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        "Zobacz wszystkie",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .clickable(onClick = onTimeline)
+                            .padding(vertical = 4.dp, horizontal = 4.dp),
+                    )
+                }
+            }
+            items(state.timeline) { event ->
+                TimelinePreviewRow(event = event, onClick = onTimeline)
+            }
+        } else {
+            item {
+                OutlinedButton(
+                    onClick = onTimeline,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Otwórz chronologię")
+                }
+            }
+        }
         item {
             Text(
                 "Pliki i asystent",
@@ -158,11 +207,69 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 FeatureTile(
-                    title = "Asystent AI (MOCK)",
-                    subtitle = "Szkielet czatu — bez rzeczywistej analizy medycznej",
+                    title = "Wykresy pomiarów",
+                    subtitle = "Trend ciśnienia, tętna, wagi i innych",
+                    icon = Icons.Default.MonitorHeart,
+                    onClick = onCharts,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                FeatureTile(
+                    title = if (aiMock) "Asystent AI (MOCK)" else "Asystent AI",
+                    subtitle = if (aiMock) {
+                        "Tryb demonstracyjny — bez rzeczywistej analizy medycznej"
+                    } else {
+                        "Model lokalny: ${aiModeLabel(aiStatus)}"
+                    },
                     icon = Icons.Default.SmartToy,
                     onClick = onAssistant,
                     modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TimelinePreviewRow(event: TimelineEventDto, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(34.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        timelineIcon(event.type),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.size(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    event.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                )
+                Text(
+                    listOfNotNull(
+                        timelineTypeLabel(event.type),
+                        event.occurredAt?.let(DateInputs::toDisplay)?.ifBlank { null },
+                    ).joinToString(" • "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
                 )
             }
         }

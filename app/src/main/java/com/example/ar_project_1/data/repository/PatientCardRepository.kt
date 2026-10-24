@@ -5,6 +5,7 @@ import com.example.ar_project_1.data.api.ApiErrorParser
 import com.example.ar_project_1.data.api.ApiService
 import com.example.ar_project_1.data.api.AppException
 import com.example.ar_project_1.data.model.AuthResponse
+import com.example.ar_project_1.data.model.AiStatusDto
 import com.example.ar_project_1.data.model.ChatRequest
 import com.example.ar_project_1.data.model.ChatResponse
 import com.example.ar_project_1.data.model.ConversationDetailDto
@@ -16,6 +17,8 @@ import com.example.ar_project_1.data.model.LogoutRequest
 import com.example.ar_project_1.data.model.PageDto
 import com.example.ar_project_1.data.model.PatientDto
 import com.example.ar_project_1.data.model.RegisterRequest
+import com.example.ar_project_1.data.model.SearchHitDto
+import com.example.ar_project_1.data.model.TimelineEventDto
 import com.example.ar_project_1.data.resource.DateInputs
 import com.example.ar_project_1.data.resource.RecordRequestBuilder
 import com.example.ar_project_1.data.resource.ResourceType
@@ -69,7 +72,32 @@ class PatientCardRepository(
         type: ResourceType,
         page: Int = 0,
         size: Int = 50,
-    ): PageDto<JsonObject> = call { api.list(type.endpoint, page, size) }
+        sort: String? = null,
+    ): PageDto<JsonObject> = call { api.list(type.endpoint, page, size, sort) }
+
+    suspend fun timeline(
+        page: Int = 0,
+        size: Int = 20,
+        from: String? = null,
+        to: String? = null,
+        types: List<String> = emptyList(),
+    ): PageDto<TimelineEventDto> = call {
+        api.timeline(
+            from = from,
+            to = to,
+            types = types.takeIf { it.isNotEmpty() }?.joinToString(","),
+            page = page,
+            size = size,
+        )
+    }
+
+    suspend fun search(query: String, page: Int = 0, size: Int = 20): PageDto<SearchHitDto> = call {
+        api.search(query, page, size)
+    }
+
+    suspend fun measurementSeries(type: String, size: Int = 200): List<JsonObject> = call {
+        api.measurements(type = type, size = size).content
+    }
 
     suspend fun get(type: ResourceType, id: String): JsonObject = call {
         api.get("${type.endpoint}/$id")
@@ -87,8 +115,12 @@ class PatientCardRepository(
         api.delete("${type.endpoint}/$id")
     }
 
-    suspend fun documents(page: Int = 0, size: Int = 50): PageDto<DocumentDto> = call {
-        api.documents(page, size)
+    suspend fun documents(
+        page: Int = 0,
+        size: Int = 50,
+        sort: String? = null,
+    ): PageDto<DocumentDto> = call {
+        api.documents(page, size, sort)
     }
 
     suspend fun uploadDocument(
@@ -146,6 +178,16 @@ class PatientCardRepository(
 
     suspend fun chat(message: String, conversationId: String? = null): ChatResponse = call {
         api.chat(ChatRequest(conversationId = conversationId, message = message))
+    }
+
+    @Volatile
+    private var cachedAiStatus: AiStatusDto? = null
+
+    suspend fun aiStatus(force: Boolean = false): AiStatusDto {
+        cachedAiStatus?.takeIf { !force }?.let { return it }
+        val status = call { api.aiStatus() }
+        cachedAiStatus = status
+        return status
     }
 
     suspend fun conversations(): PageDto<ConversationDto> = call { api.conversations() }

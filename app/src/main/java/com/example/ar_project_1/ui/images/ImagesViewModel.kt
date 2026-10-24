@@ -23,12 +23,30 @@ data class ImagesUiState(
     val uploadCompleted: Boolean = false,
     val busyId: String? = null,
     val message: String? = null,
+    /** null = wszystkie kategorie. */
+    val category: String? = null,
+    val groupSeries: Boolean = true,
+)
+
+/** Seria zdjęć powiązanych z tym samym objawem (albo pojedyncze zdjęcie). */
+data class ImageSeries(
+    val key: String,
+    val title: String,
+    val images: List<ImageDto>,
 )
 
 class ImagesViewModel(private val repository: PatientCardRepository) : ViewModel() {
 
     var state = androidx.compose.runtime.mutableStateOf(ImagesUiState())
         private set
+
+    fun setCategory(category: String?) {
+        state.value = state.value.copy(category = category)
+    }
+
+    fun setGroupSeries(value: Boolean) {
+        state.value = state.value.copy(groupSeries = value)
+    }
 
     fun load() {
         if (state.value.loading) return
@@ -131,6 +149,27 @@ class ImagesViewModel(private val repository: PatientCardRepository) : ViewModel
 
     companion object {
         val CATEGORIES = listOf("SKIN", "INJURY", "MEDICATION_PACKAGE", "DOCUMENT", "OTHER")
+
+        /**
+         * Dzieli zdjęcia na serie: wspólny `symptomId` oznacza jedną serię,
+         * zdjęcia bez objawu zostają osobno. Serie sortowane od najnowszej.
+         */
+        fun groupIntoSeries(images: List<ImageDto>): List<ImageSeries> =
+            images.groupBy { it.symptomId ?: "single-${it.id}" }
+                .map { (key, items) ->
+                    val sorted = items.sortedByDescending { it.capturedAt ?: it.uploadedAt.orEmpty() }
+                    val title = sorted.firstOrNull()?.title?.takeIf { it.isNotBlank() }
+                        ?: sorted.firstOrNull()?.let { "Zdjęcie #${it.imageNumber}" }
+                        ?: "Zdjęcie"
+                    ImageSeries(
+                        key = key,
+                        title = if (key.startsWith("single-")) title else "Seria: $title",
+                        images = sorted,
+                    )
+                }
+                .sortedByDescending { series ->
+                    series.images.firstOrNull()?.let { it.capturedAt ?: it.uploadedAt.orEmpty() }.orEmpty()
+                }
 
         private val DATE_TIME_PATTERN = Regex("^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}$")
     }

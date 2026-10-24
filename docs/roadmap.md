@@ -37,29 +37,46 @@ OCR, powiadomienia, tryb offline, paginacja UI, testy instrumentowane.
 
 **Status:** zakończony. Szczegóły: [`android.md`](android.md).
 
-## ETAP 3 — dopracowanie doświadczenia pacjenta (następny)
+## ETAP 3 — dopracowanie doświadczenia pacjenta (ukończony)
 
-Kandydaci (do potwierdzenia):
+Zakres zrealizowany:
 
-- dashboard/chronologia zdarzeń,
-- wyszukiwanie i filtry,
-- wykresy pomiarów,
-- lepsze zarządzanie zdjęciami i seriami,
-- eksport danych do PDF/CSV,
-- motyw, dostępność, tryb ciemny,
-- paginacja i sortowanie list,
-- testy instrumentowane i CI.
+- wspólna chronologia zdarzeń: `GET /api/v1/app/timeline` scala wizyty, pomiary,
+  objawy, leki, dokumenty i zdjęcia; filtr `types`, zakres `from`/`to`, paginacja,
+- wyszukiwanie: `GET /api/v1/app/search` po dziewięciu sekcjach karty, trafienia
+  sortowane najpierw po dopasowaniu tytułu, potem po dacie,
+- wykresy pomiarów w aplikacji (Canvas, bez zewnętrznej biblioteki) ze statystykami,
+- paginacja, sortowanie serwerowe i lokalny filtr tekstowy list,
+- eksport całej karty do CSV i PDF przez SAF, bez wysyłania danych na zewnątrz,
+- zdjęcia: filtr kategorii i grupowanie w serie po `symptomId`,
+- dostępność: wybór rozmiaru tekstu w całej aplikacji (0,9–1,4),
+- motyw jasny, szaro-biały z czerwonym akcentem (bez trybu ciemnego).
 
-## ETAP 4 — lokalny model AI (LM Studio)
+**Status:** zakończony. Testy jednostkowe ETAPU 3 nie były uruchamiane w tej sesji —
+zostawione do samodzielnego wykonania przez użytkownika. Szczegóły:
+[`android.md`](android.md) i [`api.md`](api.md).
 
-> **Tu będzie potrzebny rzeczywisty model AI.** ETAPY 2–3 nie wymagają modelu.
+## ETAP 4 — lokalny model AI (LM Studio) (ukończony)
 
-- `LmStudioAiProvider` implementujący `AiProvider`,
-- OpenAI-compatible API, konfigurowalny URL/model, timeouty,
-- streaming odpowiedzi (opcjonalnie),
-- lepszy kontekst pacjenta i cytowanie źródeł w UI,
-- obsługa błędów i limitów bez blokowania aplikacji,
-- nadal wyraźne oznaczenie: AI nie zastępuje lekarza.
+Zakres zrealizowany:
+
+- `LmStudioAiProvider` implementujący `AiProvider` (OpenAI-compatible
+  `POST /v1/chat/completions`, bez streamingu),
+- wybór dostawcy przez `AI_PROVIDER=mock|lmstudio`, bez zmian w serwisach i UI,
+- reguły systemowe po polsku: brak diagnozy, brak zmian dawek, odesłanie do
+  lekarza, cytowanie danych z karty, objawy alarmowe → 112/SOR,
+- budżet promptu (`AI_MAX_PROMPT_CHARS`) i przycinanie historii do okna kontekstu,
+- obsługa modeli rozumujących (`reasoning_effort`, pusty `content`, `finish_reason=length`),
+- analiza zdjęć przez model vision (base64 data URL) + jawna analiza metadanych,
+  gdy plik jest za duży lub model nie widzi obrazu,
+- czytelne błędy `503 AI_PROVIDER_ERROR` po polsku (brak połączenia, timeout,
+  brak modelu, autoryzacja, za duże zdjęcie),
+- `GET /api/v1/ai/status` i dynamiczne etykiety w aplikacji (MOCK vs nazwa modelu),
+- konfiguracja Docker → LM Studio przez `host.docker.internal`,
+- dokumentacja: [`ai-architecture.md`](ai-architecture.md), [`development.md`](development.md).
+
+**Status:** zakończony. Streaming odpowiedzi świadomie pominięty (model odpowiada
+synchronicznie; aplikacja ma zwiększony timeout odczytu).
 
 ## ETAP 5 — dokumenty i analiza obrazu
 

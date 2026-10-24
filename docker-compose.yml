@@ -41,8 +41,19 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       STORAGE_ROOT: /data/storage
-      AI_PROVIDER: mock
+      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      # LM Studio działa na hoście Windows, backend siedzi w kontenerze, więc
+      # localhost wskazywałby na sam kontener. host.docker.internal = maszyna hosta.
+      LM_STUDIO_BASE_URL: ${LM_STUDIO_BASE_URL:-http://host.docker.internal:1234/v1}
+      LM_STUDIO_MODEL: ${LM_STUDIO_MODEL:-local-model}
+      LM_STUDIO_MODEL_VERSION: ${LM_STUDIO_MODEL_VERSION:-}
+      AI_REASONING_EFFORT: ${AI_REASONING_EFFORT:-none}
+      AI_MAX_OUTPUT_TOKENS: ${AI_MAX_OUTPUT_TOKENS:-2048}
       MAX_FILE_SIZE_BYTES: ${MAX_FILE_SIZE_BYTES:-26214400}
+    extra_hosts:
+      # Na Docker Desktop (Windows/macOS) wpis istnieje domyślnie; na Linuksie
+      # bez niego host.docker.internal nie rozwiązuje się.
+      - "host.docker.internal:host-gateway"
     ports:
       # Backend musi być osiągalny z telefonu/emulatora w prywatnej sieci Wi-Fi.
       - "8080:8080"

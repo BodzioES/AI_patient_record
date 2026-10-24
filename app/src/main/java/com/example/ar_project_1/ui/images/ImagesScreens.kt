@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -29,6 +30,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -65,6 +67,9 @@ import com.example.ar_project_1.ui.common.ConfirmDeleteDialog
 import com.example.ar_project_1.ui.common.EmptyState
 import com.example.ar_project_1.ui.common.EnumDropdown
 import com.example.ar_project_1.ui.common.ErrorBanner
+import com.example.ar_project_1.ui.common.LocalAiStatus
+import com.example.ar_project_1.ui.common.aiIsMock
+import com.example.ar_project_1.ui.common.aiModeLabel
 import com.example.ar_project_1.ui.common.LoadingBox
 import java.util.Locale
 
@@ -82,6 +87,11 @@ fun ImagesScreen(
     val state = viewModel.state.value
     var showUpload by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<ImageDto?>(null) }
+    val filtered = remember(state.images, state.category) {
+        val category = state.category
+        if (category == null) state.images else state.images.filter { it.category == category }
+    }
+    val series = remember(filtered) { ImagesViewModel.groupIntoSeries(filtered) }
 
     if (state.loading && state.images.isEmpty()) {
         LoadingBox(label = "Pobieranie zdjęć…")
@@ -103,7 +113,7 @@ fun ImagesScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        "Zdjęcia (${state.images.size})",
+                        "Zdjęcia (${filtered.size}/${state.images.size})",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f),
@@ -111,6 +121,42 @@ fun ImagesScreen(
                     IconButton(onClick = viewModel::load, enabled = !state.loading) {
                         Icon(Icons.Default.Refresh, contentDescription = "Odśwież")
                     }
+                }
+            }
+            item {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item {
+                        FilterChip(
+                            selected = state.category == null,
+                            onClick = { viewModel.setCategory(null) },
+                            label = { Text("Wszystkie") },
+                        )
+                    }
+                    items(ImagesViewModel.CATEGORIES) { category ->
+                        FilterChip(
+                            selected = state.category == category,
+                            onClick = { viewModel.setCategory(category) },
+                            label = { Text(ResourceCatalog.prettyEnum(category)) },
+                        )
+                    }
+                }
+            }
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FilterChip(
+                        selected = state.groupSeries,
+                        onClick = { viewModel.setGroupSeries(!state.groupSeries) },
+                        label = { Text("Grupuj serie") },
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Serie to zdjęcia powiązane z tym samym objawem.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
             if (state.error != null) {
@@ -132,15 +178,50 @@ fun ImagesScreen(
                     }
                 }
             }
-            if (state.images.isEmpty()) {
+            if (filtered.isEmpty()) {
                 item {
                     EmptyState(
-                        title = "Brak zdjęć",
-                        message = "Dodaj zdjęcie zmiany skórnej, rany lub opakowania leku.",
+                        title = if (state.images.isEmpty()) "Brak zdjęć" else "Brak zdjęć w tej kategorii",
+                        message = if (state.images.isEmpty()) {
+                            "Dodaj zdjęcie zmiany skórnej, rany lub opakowania leku."
+                        } else {
+                            "Zmień filtr kategorii, aby zobaczyć pozostałe zdjęcia."
+                        },
                     )
                 }
+            } else if (state.groupSeries) {
+                series.forEach { group ->
+                    item(key = "series-${group.key}") {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                group.title,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                if (group.images.size == 1) "1 zdjęcie" else "${group.images.size} zdjęcia",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    items(group.images, key = { it.id }) { image ->
+                        ImageCard(
+                            image = image,
+                            busy = state.busyId == image.id,
+                            onOpen = { onOpenImage(image.id) },
+                            onDelete = { pendingDelete = image },
+                        )
+                    }
+                }
             } else {
-                items(state.images, key = { it.id }) { image ->
+                items(filtered, key = { it.id }) { image ->
                     ImageCard(
                         image = image,
                         busy = state.busyId == image.id,
@@ -393,6 +474,8 @@ fun ImageDetailScreen(
         },
     )
     val state = viewModel.state.value
+    val aiStatus = LocalAiStatus.current
+    val aiMock = aiIsMock(aiStatus)
 
     Column(
         modifier = Modifier
@@ -426,13 +509,18 @@ fun ImageDetailScreen(
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
                 Text(
-                    "Analiza zdjęcia (MOCK)",
+                    if (aiMock) "Analiza zdjęcia (MOCK)" else "Analiza zdjęcia",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Szkielet integracji AI. Wynik jest demonstracyjny i nie stanowi diagnozy ani porady medycznej.",
+                    if (aiMock) {
+                        "Tryb demonstracyjny: wynik nie stanowi diagnozy ani porady medycznej."
+                    } else {
+                        "Model ${aiModeLabel(aiStatus)} opisze to, co widać na zdjęciu. " +
+                            "To nie jest diagnoza ani porada medyczna."
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -444,7 +532,7 @@ fun ImageDetailScreen(
                 ) {
                     Icon(Icons.Default.SmartToy, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text(if (state.analyzing) "Analizowanie…" else "Uruchom analizę (MOCK)")
+                    Text(if (state.analyzing) "Analizowanie…" else if (aiMock) "Uruchom analizę (MOCK)" else "Uruchom analizę")
                 }
                 if (state.analysisError != null) {
                     Spacer(Modifier.height(12.dp))

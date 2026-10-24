@@ -28,6 +28,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -77,6 +79,9 @@ fun DocumentsScreen(container: AppContainer) {
     val state = viewModel.state.value
     var showUpload by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<DocumentDto?>(null) }
+    var sortExpanded by remember { mutableStateOf(false) }
+    val currentSort = DocumentsViewModel.SORTS.firstOrNull { it.second == state.sort }
+        ?: DocumentsViewModel.SORTS.first()
 
     if (state.loading && state.documents.isEmpty()) {
         LoadingBox(label = "Pobieranie dokumentów…")
@@ -98,13 +103,44 @@ fun DocumentsScreen(container: AppContainer) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        "Dokumenty (${state.documents.size})",
+                        "Dokumenty (${state.documents.size}/${state.total})",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f),
                     )
                     IconButton(onClick = viewModel::load, enabled = !state.loading) {
                         Icon(Icons.Default.Refresh, contentDescription = "Odśwież")
+                    }
+                }
+            }
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "Sortowanie:",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Box {
+                        TextButton(onClick = { sortExpanded = true }) {
+                            Text(currentSort.first)
+                        }
+                        DropdownMenu(
+                            expanded = sortExpanded,
+                            onDismissRequest = { sortExpanded = false },
+                        ) {
+                            DocumentsViewModel.SORTS.forEach { (label, value) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        sortExpanded = false
+                                        viewModel.setSort(value)
+                                    },
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -142,6 +178,24 @@ fun DocumentsScreen(container: AppContainer) {
                         onOpen = { viewModel.download(document) },
                         onDelete = { pendingDelete = document },
                     )
+                }
+            }
+            if (!state.last) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (state.loadingMore) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        } else {
+                            OutlinedButton(onClick = viewModel::loadMore) {
+                                Text("Pokaż więcej (${state.documents.size}/${state.total})")
+                            }
+                        }
+                    }
                 }
             }
             item { Spacer(Modifier.height(88.dp)) }

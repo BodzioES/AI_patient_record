@@ -8,17 +8,24 @@ import com.example.ar_project_1.data.model.DocumentDto
 import com.example.ar_project_1.data.repository.PatientCardRepository
 import com.example.ar_project_1.data.upload.FileSaver
 import com.example.ar_project_1.data.upload.PickedFile
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 data class DocumentsUiState(
     val documents: List<DocumentDto> = emptyList(),
     val loading: Boolean = false,
+    val loadingMore: Boolean = false,
     val error: String? = null,
     val uploading: Boolean = false,
     val uploadError: String? = null,
     val uploadCompleted: Boolean = false,
     val busyId: String? = null,
     val message: String? = null,
+    val page: Int = 0,
+    val last: Boolean = true,
+    val total: Long = 0,
+    val sort: String = "uploadedAt,desc",
 )
 
 class DocumentsViewModel(
@@ -29,17 +36,28 @@ class DocumentsViewModel(
     var state = androidx.compose.runtime.mutableStateOf(DocumentsUiState())
         private set
 
+    private var loadJob: Job? = null
+    private var moreJob: Job? = null
+
     fun load() {
-        if (state.value.loading) return
-        state.value = state.value.copy(loading = true, error = null)
-        viewModelScope.launch {
+        loadJob?.cancel()
+        moreJob?.cancel()
+        val requestedSort = state.value.sort
+        state.value = state.value.copy(loading = true, loadingMore = false, error = null)
+        loadJob = viewModelScope.launch {
             try {
-                val page = repository.documents(page = 0, size = 100)
+                val page = repository.documents(page = 0, size = PAGE_SIZE, sort = requestedSort)
+                if (state.value.sort != requestedSort) return@launch
                 state.value = state.value.copy(
                     documents = page.content,
                     loading = false,
                     error = null,
+                    page = 0,
+                    last = page.last,
+                    total = page.totalElements,
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: AppException) {
                 state.value = state.value.copy(loading = false, error = e.message)
             } catch (e: Exception) {
@@ -49,6 +67,42 @@ class DocumentsViewModel(
                 )
             }
         }
+    }
+
+    fun loadMore() {
+        val current = state.value
+        if (current.loading || current.loadingMore || current.last) return
+        moreJob?.cancel()
+        state.value = current.copy(loadingMore = true, error = null)
+        moreJob = viewModelScope.launch {
+            try {
+                val nextPage = current.page + 1
+                val page = repository.documents(page = nextPage, size = PAGE_SIZE, sort = current.sort)
+                if (state.value.sort != current.sort) return@launch
+                state.value = state.value.copy(
+                    documents = state.value.documents + page.content,
+                    loadingMore = false,
+                    page = nextPage,
+                    last = page.last,
+                    total = page.totalElements,
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: AppException) {
+                state.value = state.value.copy(loadingMore = false, error = e.message)
+            } catch (e: Exception) {
+                state.value = state.value.copy(
+                    loadingMore = false,
+                    error = e.message ?: "Nie udało się pobrać kolejnych dokumentów.",
+                )
+            }
+        }
+    }
+
+    fun setSort(value: String) {
+        if (state.value.sort == value) return
+        state.value = state.value.copy(sort = value)
+        load()
     }
 
     fun upload(
@@ -94,12 +148,19 @@ class DocumentsViewModel(
                     description = description.trim().takeIf { it.isNotEmpty() },
                     documentDate = date.takeIf { it.isNotEmpty() },
                 )
-                val page = repository.documents(page = 0, size = 100)
+                val page = repository.documents(
+                    page = 0,
+                    size = PAGE_SIZE,
+                    sort = state.value.sort,
+                )
                 state.value = state.value.copy(
                     documents = page.content,
                     uploading = false,
                     uploadCompleted = true,
                     message = "Dokument został dodany.",
+                    page = 0,
+                    last = page.last,
+                    total = page.totalElements,
                 )
             } catch (e: AppException) {
                 state.value = state.value.copy(uploading = false, uploadError = e.message)
@@ -166,6 +227,14 @@ class DocumentsViewModel(
     }
 
     companion object {
+        const val PAGE_SIZE = 50
+
+        val SORTS: List<Pair<String, String>> = listOf(
+            "Najnowsze" to "uploadedAt,desc",
+            "Najstarsze" to "uploadedAt,asc",
+            "Tytuł A–Z" to "title,asc",
+        )
+
         val DOCUMENT_TYPES = listOf(
             "LAB_RESULT",
             "DISCHARGE_SUMMARY",

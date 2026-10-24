@@ -65,7 +65,9 @@ Warstwa prawna i audyt bezpieczeństwa nie są częścią ETAPU 1.
 - Logowanie OkHttp w debugowaniu używa poziomu `BASIC` — bez treści żądań i odpowiedzi.
 - Pliki wybierane są przez SAF; aplikacja nie prosi o dostęp do całej pamięci.
   Pobrane pliki trafiają do `cacheDir` i są udostępniane przez `FileProvider`.
-- Asystent AI i analiza zdjęcia są jawnie oznaczone jako MOCK.
+- Asystent AI i analiza zdjęcia zawsze pokazują zastrzeżenie medyczne; tryb pracy
+  (MOCK albo model lokalny) pochodzi z `GET /api/v1/ai/status` i nie jest zgadywany
+  po stronie aplikacji.
 
 ## 3. Autoryzacja
 

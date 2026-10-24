@@ -44,6 +44,9 @@ import com.example.ar_project_1.AppContainer
 import com.example.ar_project_1.data.resource.DateInputs
 import com.example.ar_project_1.ui.common.EmptyState
 import com.example.ar_project_1.ui.common.ErrorBanner
+import com.example.ar_project_1.ui.common.LocalAiStatus
+import com.example.ar_project_1.ui.common.aiIsMock
+import com.example.ar_project_1.ui.common.aiModeLabel
 
 @Composable
 fun AssistantScreen(container: AppContainer) {
@@ -53,6 +56,14 @@ fun AssistantScreen(container: AppContainer) {
         },
     )
     val state = viewModel.state.value
+    val aiStatus = LocalAiStatus.current
+    val mock = aiIsMock(aiStatus)
+    val bannerText = when {
+        aiStatus == null -> "Asystent AI: sprawdzanie trybu pracy… To nie jest porada medyczna ani diagnoza."
+        mock -> "Tryb MOCK: odpowiedzi demonstracyjne. To nie jest porada medyczna ani diagnoza."
+        else -> "Odpowiada lokalny model ${aiModeLabel(aiStatus)}. To nie jest porada medyczna ani diagnoza. " +
+            "Dane pozostają na Twoim serwerze."
+    }
     val listState = rememberLazyListState()
 
     LaunchedEffect(state.messages.size, state.sending) {
@@ -81,8 +92,7 @@ fun AssistantScreen(container: AppContainer) {
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    "Tryb MOCK: odpowiedzi demonstracyjne. To nie jest porada medyczna ani diagnoza. " +
-                        "Rzeczywisty model AI zostanie podłączony w kolejnym etapie.",
+                    bannerText,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                 )
@@ -132,8 +142,12 @@ fun AssistantScreen(container: AppContainer) {
             if (state.messages.isEmpty()) {
                 item {
                     EmptyState(
-                        title = "Asystent AI (MOCK)",
-                        message = "Zadaj pytanie o swoje zapisane dane. Odpowiedzi są demonstracyjne.",
+                        title = if (mock) "Asystent AI (MOCK)" else "Asystent AI",
+                        message = if (mock) {
+                            "Zadaj pytanie o swoje zapisane dane. Odpowiedzi są demonstracyjne."
+                        } else {
+                            "Zadaj pytanie o swoje zapisane dane. Odpowiada model ${aiModeLabel(aiStatus)}."
+                        },
                     )
                 }
             } else {

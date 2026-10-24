@@ -1,13 +1,18 @@
 package com.patientcard.ai.provider
 
 import com.patientcard.config.AiProperties
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 
 /**
  * Deterministic placeholder provider used in ETAP 1. It never inspects image
  * pixels and never calls a language model. Responses explicitly say they are mock.
+ *
+ * Aktywny, gdy `app.ai.provider=mock` (domyślnie). Dla prawdziwego modelu ustaw
+ * `app.ai.provider=lmstudio`.
  */
 @Component
+@ConditionalOnProperty(prefix = "app.ai", name = ["provider"], havingValue = "mock", matchIfMissing = true)
 class MockAiProvider(private val properties: AiProperties) : AiProvider {
 
     override val name: String = "mock-ai-provider"

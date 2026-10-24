@@ -4,14 +4,17 @@ Projekt studencki: prywatna karta pacjenta z lokalnym asystentem AI. Telefon And
 łączy się z backendem na PC w prywatnej sieci Wi-Fi. Dane medyczne, pliki i model AI
 pozostają lokalnie.
 
-**Aktualny stan: ETAP 2 ukończony** — backend Spring Boot z ETAPU 1 oraz aplikacja
-Android (Jetpack Compose) z logowaniem, konfigurowalnym adresem backendu, profilem
-pacjenta, CRUD wszystkich sekcji medycznych, uploadem/pobieraniem dokumentów i zdjęć,
-historią rozmów asystenta oraz jawnym trybem MOCK AI.
+**Aktualny stan: ETAP 4 ukończony** — backend Spring Boot z ETAPU 1, aplikacja
+Android (Jetpack Compose) z ETAPU 2–3 (logowanie, automatyczna konfiguracja adresu
+backendu, profil pacjenta, CRUD wszystkich sekcji medycznych, dokumenty i zdjęcia,
+chronologia, wyszukiwanie, wykresy, eksport CSV/PDF) oraz podłączony **lokalny
+model AI z LM Studio** (czat i analiza zdjęć). Domyślnie nadal działa tryb MOCK;
+przełączenie to jedna zmienna `AI_PROVIDER=lmstudio`. Testy jednostkowe pozostawiono
+do samodzielnego uruchomienia przez użytkownika.
 
-> To nie jest produkt medyczny. Mock AI nie wykonuje rzeczywistej analizy obrazu ani nie
-> udziela porad medycznych. Rzeczywisty model AI (np. LM Studio) zostanie podłączony
-> w ETAPIE 4.
+> To nie jest produkt medyczny. Zarówno mock, jak i prawdziwy model lokalny nie
+> zastępują lekarza. Model może się mylić — aplikacja zawsze pokazuje zastrzeżenie
+> medyczne, a prompt zabrania diagnozowania i zmiany dawek leków.
 
 ## 1. Technologie
 
@@ -39,14 +42,14 @@ Wersje są zapisane w `backend/build.gradle.kts` i `backend/gradle/wrapper/gradl
       allergy/ condition/ medication/ doctor/ appointment/ symptom/ measurement/
       document/ image/         # metadane + pliki
       storage/                 # bezpieczny magazyn lokalny
-      ai/                      # API AI, kontekst pacjenta, MockAiProvider
+      ai/                      # API AI, kontekst pacjenta, MockAiProvider, LmStudioAiProvider
       security/ config/ common/ repository/ entity/
     src/main/resources/
       db/migration/V1__initial_schema.sql
       application.yml application-dev.yml
     src/test/kotlin/com/patientcard/
     build.gradle.kts
-  app/                         # aplikacja Android (Compose) — ETAP 2
+  app/                         # aplikacja Android (Compose) — ETAP 2–3
     src/main/java/com/example/ar_project_1/
       data/                    # modele, API, sesja, repozytorium, upload, katalog formularzy
       ui/                      # welcome, auth, home, profil, zasoby, dokumenty, zdjęcia, asystent, ustawienia
@@ -168,7 +171,9 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 .\gradlew.bat :app:assembleDebug :app:testDebugUnitTest
 ```
 
-Stan na tej sesji: **31 testów JVM, 0 błędów**, `BUILD SUCCESSFUL`.
+Stan na tej sesji: **31 testów JVM, 0 błędów**, `BUILD SUCCESSFUL` (wynik z ETAPU 2).
+W ETAPIE 3 uruchomiono `:app:assembleDebug` i `:app:lintDebug` (0 błędów lintu);
+testy jednostkowe ETAPU 3 pozostawiono do samodzielnego uruchomienia.
 APK debug: `app/build/outputs/apk/debug/app-debug.apk`.
 Raport: `app/build/reports/tests/testDebugUnitTest/index.html`.
 
@@ -177,7 +182,7 @@ parser błędów API, konwersję dat oraz budowanie i walidację żądań CRUD. 
 instrumentowane (`app/src/androidTest`) wymagają emulatora lub telefonu i nie były
 uruchamiane w tym środowisku.
 
-## 5. Aplikacja Android (ETAP 2)
+## 5. Aplikacja Android (ETAP 2 i 3)
 
 ### 5.1. Funkcje
 
@@ -187,10 +192,20 @@ uruchamiane w tym środowisku.
 - szyfrowanie tokenów i adresu serwera kluczem AES-GCM z Android Keystore,
 - profil pacjenta: podgląd i edycja,
 - listy i formularze: alergie, schorzenia, leki, objawy, pomiary, lekarze, wizyty,
+- paginacja, sortowanie i lokalny filtr tekstowy list,
+- wspólna chronologia zdarzeń (wizyty, pomiary, objawy, leki, dokumenty, zdjęcia)
+  z filtrem rodzaju i doładowywaniem kolejnych stron,
+- wyszukiwanie po całej karcie pacjenta (nazwy, opisy, notatki),
+- wykresy pomiarów (ciśnienie, tętno, waga, temperatura, glukoza, saturacja)
+  ze statystykami ostatniego okresu,
+- eksport całej karty do CSV lub PDF przez systemowy wybór miejsca zapisu,
+- zdjęcia: upload, podgląd, usuwanie, analiza AI (mock lub model vision), filtr
+  kategorii i grupowanie serii,
 - dokumenty: upload (PDF/JPG/PNG), pobranie i otwarcie, usuwanie,
-- zdjęcia: upload, podgląd w aplikacji, usuwanie, analiza MOCK,
-- asystent AI: czat MOCK, historia rozmów, źródła, wyraźne oznaczenie MOCK,
-- ustawienia: wylogowanie, czyszczenie pamięci podręcznej, informacje o aplikacji,
+- asystent AI: czat z lokalnym modelem (LM Studio) lub w trybie MOCK, historia
+  rozmów, źródła, etykieta trybu pobierana z `GET /api/v1/ai/status`,
+- ustawienia: rozmiar tekstu (dostępność), wylogowanie, czyszczenie pamięci
+  podręcznej, informacje o aplikacji,
 - komunikaty błędów po polsku, stany ładowania i puste.
 
 ### 5.2. Uruchomienie
@@ -238,15 +253,26 @@ health wymagają `Authorization: Bearer <accessToken>`.
 CRUD, paginacja (`page`, `size`, `sort`), filtrowanie tam, gdzie ma sens.
 Pliki: `POST` multipart, `GET /{id}/file`, `DELETE`.
 
+Dodatkowo (ETAP 3):
+
+| Metoda | Ścieżka | Opis |
+|---|---|---|
+| GET | `/timeline` | wspólna chronologia; `from`, `to`, `types`, `page`, `size` |
+| GET | `/search` | wyszukiwanie tekstowe; `q` (min. 2 znaki), `page`, `size` |
+
+`types` przyjmuje listę: `APPOINTMENT`, `MEASUREMENT`, `SYMPTOM`, `MEDICATION`,
+`DOCUMENT`, `IMAGE`. Szczegóły: [`docs/api.md`](docs/api.md).
+
 ### AI — `/api/v1/ai`
 
 | Metoda | Ścieżka | Opis |
 |---|---|---|
-| POST | `/chat` | rozmowa; ETAP 1 zwraca odpowiedź MOCK |
+| GET | `/status` | aktywny dostawca AI (`mock`, `modelName`, `notice`) |
+| POST | `/chat` | rozmowa (mock lub model lokalny) |
 | GET | `/conversations` | historia rozmów |
 | GET | `/conversations/{id}` | rozmowa z wiadomościami i źródłami |
 | DELETE | `/conversations/{id}` | usunięcie rozmowy |
-| POST | `/images/{imageId}/analyze` | zapis wyniku MOCK |
+| POST | `/images/{imageId}/analyze` | analiza zdjęcia (mock lub model vision) |
 | GET | `/images/{imageId}/analysis` | wyniki analiz zdjęcia |
 
 Pełna lista i przykłady: [`docs/api.md`](docs/api.md).
@@ -305,15 +331,24 @@ albo (świadomie, tylko dla pustego repo) `git push --force -u origin main`.
 `.gitkeep`) oraz klucze. Przed commitem sprawdź `git status` i nigdy nie dodawaj
 prawdziwych danych medycznych.
 
-## 10. Znane ograniczenia ETAPU 2
+## 10. Znane ograniczenia ETAPU 2–4
 
-- brak rzeczywistego modelu AI — `MockAiProvider` jawnie oznacza odpowiedzi; czat i
-  analiza zdjęcia w aplikacji są oznaczone jako MOCK,
-- brak OCR i rzeczywistej analizy obrazu,
+- domyślnie działa `MockAiProvider`; po `AI_PROVIDER=lmstudio` czat i analiza
+  zdjęć korzystają z lokalnego modelu (wymaga uruchomionego LM Studio),
+- odpowiedzi modelu są generowane synchronicznie (bez streamingu) — przy słabszym
+  sprzęcie widać dłuższe oczekiwanie,
+- analiza zdjęcia działa tylko dla modeli z vision; dla modeli tekstowych backend
+  wprost informuje, że nie widzi obrazu,
+- zdjęcia powyżej `AI_MAX_VISION_IMAGE_BYTES` (10 MB) nie są wysyłane do modelu,
+- brak OCR dokumentów,
 - brak trybu offline i powiadomień,
 - brak testów instrumentowanych UI uruchomionych na emulatorze/telefonie,
 - `width_px` / `height_px` zdjęć nadal nie są odczytywane z plików po stronie backendu,
-- lista rekordów pobiera pierwsze 100 pozycji bez paginacji w UI,
+- chronologia scala maksymalnie 200 najnowszych pozycji z każdego źródła,
+- wyszukiwanie działa na `LIKE` (bez indeksu pełnotekstowego) i zwraca maks. 10
+  trafień na sekcję,
+- filtr tekstowy listy działa na już pobranych stronach (nie zastępuje wyszukiwania
+  serwerowego),
 - brak automatycznego czyszczenia osieroconych plików po awarii dysku,
 - access token pozostaje ważny do wygaśnięcia po logout (refresh jest revokowany),
 - brak rate limitingu i 2FA,
@@ -324,7 +359,9 @@ prawdziwych danych medycznych.
 
 ## 11. Następny etap
 
-ETAP 3: dopracowanie doświadczenia pacjenta (chronologia, filtry, wykresy, eksport,
-dostępność, testy UI/CI). ETAP 4: podłączenie lokalnego modelu AI (LM Studio,
-`LmStudioAiProvider`). **Rzeczywisty model AI nie jest jeszcze potrzebny — będzie
-wymagany dopiero na początku ETAPU 4.**
+ETAP 5: OCR/ekstrakcja tekstu z dokumentów, kolejka zadań AI ze statusami w UI,
+wersjonowanie promptów oraz zgody i ostrzeżenia przed analizą. Szczegóły:
+[`docs/roadmap.md`](docs/roadmap.md).
+
+Jak uruchomić lokalny model: [`docs/development.md`](docs/development.md) (sekcja 11)
+i [`docs/ai-architecture.md`](docs/ai-architecture.md).

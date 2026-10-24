@@ -9,11 +9,12 @@ Backend prywatnej karty pacjenta działający lokalnie na PC:
 - lokalny dysk na pliki,
 - dwa obszary API: aplikacyjny (`/api/v1/app`) i AI (`/api/v1/ai`),
 - wspólne uwierzytelnianie i autoryzacja,
-- AI na tym etapie wyłącznie jako szkielet z `MockAiProvider`.
+- AI jako wymienny dostawca: `MockAiProvider` (domyślnie) albo
+  `LmStudioAiProvider` (lokalny model przez LM Studio).
 
-Aplikacja Android (ETAP 2) jest klientem tego API: Compose, Retrofit/OkHttp,
-bezpieczna sesja w Android Keystore. LM Studio i rzeczywista analiza obrazów nie są
-częścią ETAPU 2 — przewidziane na ETAP 4/5.
+Aplikacja Android (ETAP 2–3) jest klientem tego API: Compose, Retrofit/OkHttp,
+bezpieczna sesja w Android Keystore. ETAP 4 podłącza lokalny model (czat + vision);
+OCR dokumentów pozostaje w ETAPIE 5.
 
 ## 2. Kontekst systemu
 
@@ -27,16 +28,16 @@ Telefon Android (Compose, ETAP 2)
 |                                                   |
 |  /api/v1/app          /api/v1/ai                  |
 |  auth, karta, leki,   rozmowy, kontekst pacjenta,  |
-|  wizyty, pliki...     źródła, MockAiProvider       |
+|  wizyty, pliki...     źródła, dostawca AI          |
 |          \                 /                       |
 |           \               /                        |
 |            +-- PostgreSQL +                        |
 |            +-- lokalny magazyn plików              |
 +---------------------------------------------------+
                           |
-                          | (ETAP 4) OpenAI-compatible API
+                          | OpenAI-compatible API (tylko sieć lokalna)
                           v
-                 LM Studio na PC (później)
+                 LM Studio na PC (model lokalny)
 ```
 
 Zasady:
@@ -64,9 +65,9 @@ com.patientcard
 ├── image         metadane, numeracja, upload/pobieranie
 ├── storage       walidacja plików, bezpieczny zapis/odczyt
 ├── ai
-│   ├── provider  AiProvider + MockAiProvider
+│   ├── provider  AiProvider + MockAiProvider + LmStudioAiProvider
 │   ├── context   PatientContextProvider, walidacja źródeł
-│   └── ...       chat, rozmowy, analiza obrazu (mock)
+│   └── ...       chat, rozmowy, analiza obrazu (tekst i vision)
 ├── security      JWT, filtr, principal
 ├── config        properties, Security, OpenAPI
 ├── common        błędy, paginacja, encje bazowe
@@ -106,7 +107,7 @@ HTTP -> JwtAuthenticationFilter -> Controller (walidacja DTO)
 | Metadane w DB, pliki na dysku | brak BLOB w PostgreSQL, kontrolowany dostęp |
 | `storage_key` generowany serwerowo | brak path traversal, brak zaufania do nazwy pliku |
 | `ai_message_sources` polimorficzne | elastyczne źródła odpowiedzi; ownership walidowany w aplikacji |
-| Mock provider za interfejsem | wymiana na LM Studio bez zmian w logice biznesowej |
+| Mock provider za interfejsem | wymiana na LM Studio bez zmian w logice biznesowej (realizuje to `AI_PROVIDER`) |
 | `origin` w `medical_conditions` | rozróżnienie wpisu pacjenta od rozpoznania lekarza |
 
 ## 6. Spójność plików i bazy
@@ -145,7 +146,10 @@ ostrzeżenie w logu. Automatyczny sweeper nie został dodany w ETAPIE 1.
 - Źródła są zapisywane w `ai_message_sources`; przed zapisem sprawdzany jest
   właściciel każdego źródła.
 - Mock nie udaje rzeczywistej analizy — treść i flaga `mock` są jednoznaczne.
-- Docelowo LM Studio będzie inną implementacją `AiProvider`.
+- `LmStudioAiProvider` jest inną implementacją tego samego interfejsu; wybór przez
+  `AI_PROVIDER`, bez zmian w serwisach. Prompt traktuje dane karty jako dane,
+  nie polecenia (blok `=== DANE Z KARTY PACJENTA ===`), a zdjęcie jest wysyłane
+  tylko po jawnym działaniu użytkownika.
 
 ## 9. Gotowość na wielu użytkowników
 

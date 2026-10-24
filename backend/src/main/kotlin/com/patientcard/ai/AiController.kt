@@ -30,6 +30,9 @@ class AiController(
         @Valid @RequestBody request: ChatRequest,
     ): ChatResponse = chatService.chat(principal, request)
 
+    @GetMapping("/status")
+    fun status(): AiStatusResponse = chatService.status()
+
     @GetMapping("/conversations")
     fun conversations(
         @AuthenticationPrincipal principal: UserPrincipal,

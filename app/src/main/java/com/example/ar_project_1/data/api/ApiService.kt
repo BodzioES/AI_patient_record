@@ -1,6 +1,7 @@
 package com.example.ar_project_1.data.api
 
 import com.example.ar_project_1.data.model.AuthResponse
+import com.example.ar_project_1.data.model.AiStatusDto
 import com.example.ar_project_1.data.model.ChatRequest
 import com.example.ar_project_1.data.model.ChatResponse
 import com.example.ar_project_1.data.model.ConversationDetailDto
@@ -14,6 +15,8 @@ import com.example.ar_project_1.data.model.PageDto
 import com.example.ar_project_1.data.model.PatientDto
 import com.example.ar_project_1.data.model.RefreshRequest
 import com.example.ar_project_1.data.model.RegisterRequest
+import com.example.ar_project_1.data.model.SearchHitDto
+import com.example.ar_project_1.data.model.TimelineEventDto
 import com.google.gson.JsonObject
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
@@ -57,6 +60,7 @@ interface ApiService {
     suspend fun documents(
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 50,
+        @Query("sort") sort: String? = null,
     ): PageDto<DocumentDto>
 
     @GET("app/images")
@@ -70,7 +74,32 @@ interface ApiService {
         @Url url: String,
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 50,
+        @Query("sort") sort: String? = null,
     ): PageDto<JsonObject>
+
+    @GET("app/measurements")
+    suspend fun measurements(
+        @Query("type") type: String,
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 200,
+        @Query("sort") sort: String = "measuredAt,desc",
+    ): PageDto<JsonObject>
+
+    @GET("app/timeline")
+    suspend fun timeline(
+        @Query("from") from: String? = null,
+        @Query("to") to: String? = null,
+        @Query("types") types: String? = null,
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 20,
+    ): PageDto<TimelineEventDto>
+
+    @GET("app/search")
+    suspend fun search(
+        @Query("q") q: String,
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 20,
+    ): PageDto<SearchHitDto>
 
     @GET
     suspend fun get(@Url url: String): JsonObject
@@ -115,6 +144,9 @@ interface ApiService {
 
     @POST("ai/chat")
     suspend fun chat(@Body request: ChatRequest): ChatResponse
+
+    @GET("ai/status")
+    suspend fun aiStatus(): AiStatusDto
 
     @GET("ai/conversations")
     suspend fun conversations(

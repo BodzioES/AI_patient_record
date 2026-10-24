@@ -10,6 +10,8 @@ import com.patientcard.entity.MedicalImage
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Query
+import java.time.Instant
 import java.util.UUID
 
 interface MedicalImageRepository : JpaRepository<MedicalImage, UUID> {
@@ -17,7 +19,21 @@ interface MedicalImageRepository : JpaRepository<MedicalImage, UUID> {
     fun findAllByPatientId(patientId: UUID, pageable: Pageable): Page<MedicalImage>
     fun findAllByPatientIdAndSymptomId(patientId: UUID, symptomId: UUID, pageable: Pageable): Page<MedicalImage>
     fun findAllByPatientIdOrderByImageNumberAsc(patientId: UUID, pageable: Pageable): List<MedicalImage>
+    fun findAllByPatientIdAndUploadedAtBetween(
+        patientId: UUID,
+        from: Instant,
+        to: Instant,
+        pageable: Pageable,
+    ): Page<MedicalImage>
     fun countByPatientId(patientId: UUID): Long
+
+    @Query(
+        "select i from MedicalImage i where i.patientId = :patientId and (" +
+            "lower(coalesce(i.title, '')) like concat('%', :q, '%') or " +
+            "lower(coalesce(i.description, '')) like concat('%', :q, '%') or " +
+            "lower(i.originalFilename) like concat('%', :q, '%'))",
+    )
+    fun search(patientId: UUID, q: String, pageable: Pageable): List<MedicalImage>
 }
 
 interface ImageAiAnalysisRepository : JpaRepository<ImageAiAnalysis, UUID> {

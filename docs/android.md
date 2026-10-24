@@ -5,7 +5,8 @@ wskazanym przez użytkownika (PC w prywatnej sieci Wi-Fi). Nie zawiera prawdziwy
 medycznych ani sekretów.
 
 > To projekt studencki, nie wyrób medyczny. Asystent AI i analiza zdjęcia działają
-> w trybie **MOCK** — nie wykonują rzeczywistej analizy medycznej.
+> z lokalnym modelem (LM Studio) albo w trybie **MOCK** — w żadnym z nich nie
+> zastępują lekarza i nie stawiają diagnozy.
 
 ## 1. Stack
 
@@ -34,12 +35,16 @@ app/src/main/java/com/example/ar_project_1/
     model/                     # DTO dopasowane do backendu
     repository/                # PatientCardRepository — jedyne wejście do API
     resource/                  # katalog pól formularzy, budowanie JSON, daty, podsumowania
+    export/                    # ExportService — CSV i PDF budowane lokalnie
     session/                   # StoredSession, SessionManager, SecureSessionStore
     upload/                    # SAF -> RequestBody, zapis plików, FileProvider
   ui/
-    MainApp.kt                 # trasy, dolna nawigacja, pasek tytułu
-    auth/ setup/ home/ profile/
+    MainApp.kt                 # trasy, dolna nawigacja, pasek tytułu, skala tekstu
+    auth/ onboarding/ home/ profile/
     resource/                  # generyczna lista + formularz dla 7 sekcji
+    timeline/                  # wspólna chronologia zdarzeń
+    search/                    # wyszukiwanie po całej karcie
+    charts/                    # wykresy pomiarów (Canvas)
     documents/ images/ assistant/ settings/ common/ theme/
 ```
 
@@ -110,27 +115,66 @@ Emulator: `http://10.0.2.2:8080`. Telefon: `adb reverse tcp:8080 tcp:8080` i
 | `profile`, `profile/edit` | podgląd i edycja profilu |
 | `resource/{type}` | lista sekcji medycznej |
 | `resource/{type}/new`, `resource/{type}/edit/{id}` | formularz |
-| `documents` | lista, upload, pobranie, usunięcie |
-| `images`, `images/{imageId}` | lista, upload, podgląd, analiza MOCK |
-| `assistant` | czat MOCK, historia, źródła |
-| `settings` | konto, cache, informacje |
+| `documents` | lista z sortowaniem i doładowywaniem, upload, pobranie, usunięcie |
+| `images`, `images/{imageId}` | lista z filtrem kategorii i seriami, upload, podgląd, analiza AI |
+| `assistant` | czat z modelem lokalnym lub MOCK, historia, źródła |
+| `timeline` | wspólna chronologia z filtrem rodzaju i doładowywaniem |
+| `charts` | wykresy pomiarów i statystyki |
+| `search` | wyszukiwanie po całej karcie (ikona lupy w pasku tytułu) |
+| `settings` | konto, eksport CSV/PDF, rozmiar tekstu, cache, informacje |
 
 Dolna nawigacja (bez podpisów): Dokumenty, Asystent, **Start**, Zdjęcia, Ustawienia.
 
 Ekran powitalny (`UiPreferences.welcomeSeen`) pokazuje się tylko raz, przed
 logowaniem; „Kontynuuj” zapisuje flagę i przechodzi do logowania lub karty pacjenta.
 
-## 8. Tryb MOCK AI
+### 7.1. Chronologia, wyszukiwanie i wykresy
 
-- `POST ai/chat` jest wołane normalnie, ale backend odpowiada `MockAiProvider`.
-- Odpowiedź ma flagę `mock`; UI pokazuje etykietę `MOCK` i ostrzeżenie, że to nie jest
-  porada medyczna.
+- `timeline` pobiera `GET app/timeline` po 20 zdarzeń; „Pokaż więcej” doładowuje
+  kolejne strony. Filtr rodzaju wysyła `types=...` do backendu.
+- `search` odpytuje `GET app/search` po 350 ms od ostatniej zmiany tekstu; minimum
+  to 2 znaki. Trafienie otwiera właściwą sekcję (albo Dokumenty/Zdjęcia).
+- `charts` pobiera do 100 najnowszych pomiarów danego typu (`measuredAt,desc`),
+  odwraca je do rosnącej osi czasu i rysuje własnym `Canvas` (bez biblioteki
+  wykresów). Dla ciśnienia druga linia to wartości rozkurczowe.
+- listy sekcji medycznych i dokumenty pobierają po 50 pozycji, mają sortowanie
+  serwerowe (`sort=pole,kierunek`) oraz „Pokaż więcej”; listy sekcji mają dodatkowo
+  lokalny filtr tekstowy na pobranych wpisach.
+
+### 7.2. Eksport CSV/PDF
+
+- `ExportViewModel` zbiera wszystkie sekcje partiami po 100 (limit backendu),
+  maksymalnie 20 stron na sekcję.
+- `ExportService` buduje CSV (BOM UTF-8, separator `;`, zgodny z Excelem) oraz PDF
+  A4 przez `android.graphics.pdf.PdfDocument` (zawijanie tekstu, numeracja stron).
+- Zapis przez SAF (`ActivityResultContracts.CreateDocument`), więc aplikacja nie
+  potrzebuje uprawnień do całej pamięci. Plik nie opuszcza telefonu.
+
+### 7.3. Dostępność
+
+- Ustawienia → „Dostępność” zmienia skalę tekstu (0,9–1,4). Wartość jest zapisana
+  w `UiPreferences`, a `MainApp` dostarcza ją przez `LocalDensity`.
+- Motyw pozostaje jasny, szaro-biały z czerwonym akcentem; tryb ciemny nie jest
+  częścią projektu.
+
+## 8. Tryb AI (MOCK albo model lokalny)
+
+- `POST ai/chat` jest wołane zawsze tak samo; backend wybiera dostawcę po
+  `AI_PROVIDER` (`mock` lub `lmstudio`).
+- `GET ai/status` zwraca `mock`, `modelName` i `notice`. Aplikacja pobiera status raz
+  po zalogowaniu (`LocalAiStatus`) i na tej podstawie pokazuje etykietę `MOCK` albo
+  nazwę modelu — w banerze czatu, na kafelku na starcie, w ustawieniach i na ekranie
+  zdjęcia.
+- Odpowiedź czatu ma flagę `mock`; przy prawdziwym modelu UI pokazuje jego nazwę
+  i nadal ostrzega, że to nie jest porada medyczna.
 - `POST ai/images/{id}/analyze` zwraca `analysisText`, `mock`, `notice`; ekran zdjęcia
-  wyświetla je w ramce „Analiza zdjęcia (MOCK)”.
-- Brak streamingu, OCR i rzeczywistego modelu vision.
+  wyświetla je w ramce „Analiza zdjęcia” (z dopiskiem `(MOCK)` tylko w trybie mock).
+- Dopóki status nie jest znany (brak połączenia), UI nie twierdzi, że działa
+  prawdziwy model.
+- Brak streamingu; klient HTTP ma zwiększony timeout odczytu (180 s), bo model
+  generuje całą odpowiedź przed wysłaniem.
 
-**Rzeczywisty model AI nie jest wymagany w ETAPIE 2/3.** Będzie potrzebny na początku
-ETAPU 4, gdy powstanie `LmStudioAiProvider` i konfiguracja URL/modelu.
+Podłączenie modelu: [`development.md`](development.md) (sekcja 11).
 
 ## 9. Build, testy, instalacja
 
@@ -147,13 +191,19 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 # build + testy JVM
 .\gradlew.bat :app:assembleDebug :app:testDebugUnitTest
 
+# sam build i lint (ETAP 3)
+.\gradlew.bat :app:assembleDebug :app:lintDebug
+
 # instalacja na podłączonym urządzeniu/emulatorze
 .\gradlew.bat :app:installDebug
 ```
 
 - APK: `app/build/outputs/apk/debug/app-debug.apk`
 - Raport testów: `app/build/reports/tests/testDebugUnitTest/index.html`
-- Stan tej sesji: 31 testów JVM, 0 błędów, `BUILD SUCCESSFUL`.
+- Raport lint: `app/build/reports/lint-results-debug.html`
+- Stan po ETAPIE 2: 31 testów JVM, 0 błędów, `BUILD SUCCESSFUL`.
+- ETAP 3: `assembleDebug` i `lintDebug` zakończone sukcesem; **testy jednostkowe
+  ETAPU 3 nie były uruchamiane** — użytkownik uruchamia je samodzielnie.
 - Testy instrumentowane (`app/src/androidTest`) wymagają emulatora/telefonu; nie były
   uruchamiane.
 
@@ -173,11 +223,16 @@ budowanie JSON). Klasy zależne od `Context`/Keystore nie mają testów JVM.
 
 Nie używaj tego zestawu w internecie bez HTTPS, reverse proxy i utwardzenia z ETAPU 6.
 
-## 11. Ograniczenia ETAPU 2
+## 11. Ograniczenia ETAPU 2 i 3
 
-- brak paginacji w UI (pobierane jest pierwsze 100 rekordów),
-- brak trybu offline, powiadomień, wykresów i eksportu,
+- brak trybu offline, powiadomień i trybu ciemnego (motyw ma pozostać jasny),
 - brak rzeczywistego AI/OCR,
 - brak testów UI na urządzeniu,
 - brak automatycznego odczytu wymiarów zdjęcia po stronie backendu,
-- brak rate limitingu i 2FA po stronie serwera.
+- brak rate limitingu i 2FA po stronie serwera,
+- chronologia scala maks. 200 najnowszych pozycji z każdego źródła,
+- wyszukiwanie opiera się na `LIKE` (bez indeksu pełnotekstowego) i zwraca maks.
+  10 trafień na sekcję,
+- filtr tekstowy na listach działa lokalnie na pobranych stronach,
+- eksport ogranicza się do 20 stron po 100 pozycji na sekcję,
+- testy jednostkowe ETAPU 3 pozostają do uruchomienia przez użytkownika.

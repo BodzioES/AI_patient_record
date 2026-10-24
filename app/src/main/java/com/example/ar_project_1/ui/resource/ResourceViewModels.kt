@@ -8,6 +8,8 @@ import com.example.ar_project_1.data.resource.RecordRequestBuilder
 import com.example.ar_project_1.data.resource.RecordSummary
 import com.example.ar_project_1.data.resource.ResourceCatalog
 import com.example.ar_project_1.data.resource.ResourceType
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 data class ResourceRow(
@@ -15,11 +17,20 @@ data class ResourceRow(
     val summary: RecordSummary,
 )
 
+data class ResourceSort(val label: String, val value: String)
+
 data class ResourceListUiState(
     val rows: List<ResourceRow> = emptyList(),
     val loading: Boolean = false,
+    val loadingMore: Boolean = false,
     val error: String? = null,
     val deletingId: String? = null,
+    val page: Int = 0,
+    val last: Boolean = true,
+    val total: Long = 0,
+    val sort: String = "",
+    /** Filtr tekstowy działa na już pobranych wpisach. */
+    val filter: String = "",
 )
 
 class ResourceListViewModel(
@@ -27,23 +38,37 @@ class ResourceListViewModel(
     private val type: ResourceType,
 ) : ViewModel() {
 
-    var state = androidx.compose.runtime.mutableStateOf(ResourceListUiState())
+    var state = androidx.compose.runtime.mutableStateOf(
+        ResourceListUiState(sort = sortsFor(type).first().value),
+    )
         private set
 
+    private var loadJob: Job? = null
+    private var moreJob: Job? = null
+
     fun load() {
-        if (state.value.loading) return
-        state.value = state.value.copy(loading = true, error = null)
-        viewModelScope.launch {
+        loadJob?.cancel()
+        moreJob?.cancel()
+        val requestedSort = state.value.sort
+        state.value = state.value.copy(loading = true, loadingMore = false, error = null)
+        loadJob = viewModelScope.launch {
             try {
-                val page = repository.list(type, page = 0, size = 100)
-                state.value = ResourceListUiState(
-                    rows = page.content.mapNotNull { json ->
-                        val id = json.get("id")?.takeUnless { it.isJsonNull }?.asString
-                            ?: return@mapNotNull null
-                        ResourceRow(id, ResourceCatalog.summary(type, json))
-                    },
-                    loading = false,
+                val page = repository.list(
+                    type = type,
+                    page = 0,
+                    size = PAGE_SIZE,
+                    sort = requestedSort.ifBlank { null },
                 )
+                if (state.value.sort != requestedSort) return@launch
+                state.value = state.value.copy(
+                    rows = page.content.mapNotNull { it.toRow() },
+                    loading = false,
+                    page = 0,
+                    last = page.last,
+                    total = page.totalElements,
+                )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: AppException) {
                 state.value = state.value.copy(loading = false, error = e.message)
             } catch (e: Exception) {
@@ -55,6 +80,51 @@ class ResourceListViewModel(
         }
     }
 
+    fun loadMore() {
+        val current = state.value
+        if (current.loading || current.loadingMore || current.last) return
+        moreJob?.cancel()
+        state.value = current.copy(loadingMore = true, error = null)
+        moreJob = viewModelScope.launch {
+            try {
+                val nextPage = current.page + 1
+                val page = repository.list(
+                    type = type,
+                    page = nextPage,
+                    size = PAGE_SIZE,
+                    sort = current.sort.ifBlank { null },
+                )
+                if (state.value.sort != current.sort) return@launch
+                state.value = state.value.copy(
+                    rows = state.value.rows + page.content.mapNotNull { it.toRow() },
+                    loadingMore = false,
+                    page = nextPage,
+                    last = page.last,
+                    total = page.totalElements,
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: AppException) {
+                state.value = state.value.copy(loadingMore = false, error = e.message)
+            } catch (e: Exception) {
+                state.value = state.value.copy(
+                    loadingMore = false,
+                    error = e.message ?: "Nie udało się pobrać kolejnych wpisów.",
+                )
+            }
+        }
+    }
+
+    fun setSort(value: String) {
+        if (state.value.sort == value) return
+        state.value = state.value.copy(sort = value)
+        load()
+    }
+
+    fun setFilter(value: String) {
+        state.value = state.value.copy(filter = value)
+    }
+
     fun delete(id: String) {
         if (state.value.deletingId != null) return
         state.value = state.value.copy(deletingId = id, error = null)
@@ -64,6 +134,7 @@ class ResourceListViewModel(
                 state.value = state.value.copy(
                     deletingId = null,
                     rows = state.value.rows.filterNot { it.id == id },
+                    total = (state.value.total - 1).coerceAtLeast(0),
                 )
             } catch (e: AppException) {
                 state.value = state.value.copy(deletingId = null, error = e.message)
@@ -73,6 +144,50 @@ class ResourceListViewModel(
                     error = e.message ?: "Nie udało się usunąć wpisu.",
                 )
             }
+        }
+    }
+
+    private fun com.google.gson.JsonObject.toRow(): ResourceRow? {
+        val id = get("id")?.takeUnless { it.isJsonNull }?.asString ?: return null
+        return ResourceRow(id, ResourceCatalog.summary(type, this))
+    }
+
+    companion object {
+        const val PAGE_SIZE = 50
+
+        fun sortsFor(type: ResourceType): List<ResourceSort> = when (type) {
+            ResourceType.ALLERGIES -> listOf(
+                ResourceSort("Substancja A–Z", "substance,asc"),
+                ResourceSort("Najnowsze", "createdAt,desc"),
+                ResourceSort("Najstarsze", "createdAt,asc"),
+            )
+            ResourceType.CONDITIONS -> listOf(
+                ResourceSort("Nazwa A–Z", "name,asc"),
+                ResourceSort("Najnowsze", "createdAt,desc"),
+                ResourceSort("Najstarsze", "createdAt,asc"),
+            )
+            ResourceType.MEDICATIONS -> listOf(
+                ResourceSort("Nazwa A–Z", "name,asc"),
+                ResourceSort("Najnowsze", "createdAt,desc"),
+                ResourceSort("Najstarsze", "createdAt,asc"),
+            )
+            ResourceType.SYMPTOMS -> listOf(
+                ResourceSort("Najnowsze", "observedAt,desc"),
+                ResourceSort("Najstarsze", "observedAt,asc"),
+                ResourceSort("Tytuł A–Z", "title,asc"),
+            )
+            ResourceType.MEASUREMENTS -> listOf(
+                ResourceSort("Najnowsze", "measuredAt,desc"),
+                ResourceSort("Najstarsze", "measuredAt,asc"),
+            )
+            ResourceType.DOCTORS -> listOf(
+                ResourceSort("Nazwisko A–Z", "lastName,asc"),
+                ResourceSort("Najnowsze", "createdAt,desc"),
+            )
+            ResourceType.APPOINTMENTS -> listOf(
+                ResourceSort("Najnowsze", "scheduledAt,desc"),
+                ResourceSort("Najstarsze", "scheduledAt,asc"),
+            )
         }
     }
 }

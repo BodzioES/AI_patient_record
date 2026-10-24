@@ -15,6 +15,13 @@ data class ChatRequest(
     val message: String = "",
 )
 
+data class AiStatusResponse(
+    val mock: Boolean,
+    val modelName: String,
+    val modelVersion: String?,
+    val notice: String,
+)
+
 data class AiSourceResponse(
     val type: AiSourceType,
     val sourceId: UUID,

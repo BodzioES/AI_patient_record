@@ -25,8 +25,10 @@ class ApiClient(
         }
         val client = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(60, TimeUnit.SECONDS)
+            // Lokalny model generuje odpowiedź w całości przed wysłaniem (bez streamingu),
+            // więc limit musi pomieścić czas "myślenia" modelu.
+            .readTimeout(180, TimeUnit.SECONDS)
+            .writeTimeout(120, TimeUnit.SECONDS)
             .addInterceptor(ServerUrlInterceptor(sessionManager))
             .addInterceptor(AuthInterceptor(sessionManager))
             .addInterceptor(logging)

@@ -11,6 +11,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.CircularProgressIndicator
@@ -26,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,7 +36,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavBackStackEntry
@@ -45,9 +49,14 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.ar_project_1.AppContainer
+import com.example.ar_project_1.data.model.AiStatusDto
+import com.example.ar_project_1.data.model.SearchHitDto
+import com.example.ar_project_1.data.model.TimelineEventDto
 import com.example.ar_project_1.data.resource.ResourceType
 import com.example.ar_project_1.ui.assistant.AssistantScreen
 import com.example.ar_project_1.ui.auth.AuthScreen
+import com.example.ar_project_1.ui.charts.ChartsScreen
+import com.example.ar_project_1.ui.common.LocalAiStatus
 import com.example.ar_project_1.ui.documents.DocumentsScreen
 import com.example.ar_project_1.ui.home.HomeScreen
 import com.example.ar_project_1.ui.images.ImageDetailScreen
@@ -57,7 +66,9 @@ import com.example.ar_project_1.ui.profile.ProfileEditScreen
 import com.example.ar_project_1.ui.profile.ProfileScreen
 import com.example.ar_project_1.ui.resource.ResourceFormScreen
 import com.example.ar_project_1.ui.resource.ResourceListScreen
+import com.example.ar_project_1.ui.search.SearchScreen
 import com.example.ar_project_1.ui.settings.SettingsScreen
+import com.example.ar_project_1.ui.timeline.TimelineScreen
 
 object Routes {
     const val WELCOME = "welcome"
@@ -70,6 +81,9 @@ object Routes {
     const val IMAGE_DETAIL = "images/{imageId}"
     const val ASSISTANT = "assistant"
     const val SETTINGS = "settings"
+    const val TIMELINE = "timeline"
+    const val SEARCH = "search"
+    const val CHARTS = "charts"
     const val RESOURCE = "resource/{type}"
     const val RESOURCE_NEW = "resource/{type}/new"
     const val RESOURCE_EDIT = "resource/{type}/edit/{id}"
@@ -146,7 +160,23 @@ fun MainApp(container: AppContainer) {
         return
     }
 
-    Scaffold(
+    var textScale by remember { mutableStateOf(container.uiPreferences.textScale) }
+    val baseDensity = LocalDensity.current
+
+    var aiStatus by remember { mutableStateOf<AiStatusDto?>(null) }
+    LaunchedEffect(session.isLoggedIn) {
+        aiStatus = if (session.isLoggedIn) {
+            runCatching { container.repository.aiStatus() }.getOrNull()
+        } else {
+            null
+        }
+    }
+
+    CompositionLocalProvider(
+        LocalDensity provides Density(baseDensity.density, textScale),
+        LocalAiStatus provides aiStatus,
+    ) {
+        Scaffold(
         topBar = {
             if (showChrome) {
                 TopAppBar(
@@ -163,6 +193,13 @@ fun MainApp(container: AppContainer) {
                                     Icons.AutoMirrored.Filled.ArrowBack,
                                     contentDescription = "Wstecz",
                                 )
+                            }
+                        }
+                    },
+                    actions = {
+                        if (route != Routes.SEARCH && route != Routes.WELCOME && route != Routes.AUTH) {
+                            IconButton(onClick = { navController.navigate(Routes.SEARCH) }) {
+                                Icon(Icons.Default.Search, contentDescription = "Szukaj")
                             }
                         }
                     },
@@ -226,6 +263,26 @@ fun MainApp(container: AppContainer) {
                     onDocuments = { navController.navigate(Routes.DOCUMENTS) },
                     onImages = { navController.navigate(Routes.IMAGES) },
                     onAssistant = { navController.navigate(Routes.ASSISTANT) },
+                    onTimeline = { navController.navigate(Routes.TIMELINE) },
+                    onCharts = { navController.navigate(Routes.CHARTS) },
+                )
+            }
+
+            composable(Routes.TIMELINE) {
+                TimelineScreen(
+                    container = container,
+                    onOpenEvent = { event -> navigateForTimelineEvent(navController, event) },
+                )
+            }
+
+            composable(Routes.CHARTS) {
+                ChartsScreen(container)
+            }
+
+            composable(Routes.SEARCH) {
+                SearchScreen(
+                    container = container,
+                    onOpenHit = { hit -> navigateForSearchHit(navController, hit) },
                 )
             }
 
@@ -271,6 +328,12 @@ fun MainApp(container: AppContainer) {
             composable(Routes.SETTINGS) {
                 SettingsScreen(
                     container = container,
+                    textScale = textScale,
+                    onTextScaleChange = { value ->
+                        val clamped = value.coerceIn(0.9f, 1.4f)
+                        container.uiPreferences.textScale = clamped
+                        textScale = clamped
+                    },
                     onLoggedOut = { clearAndNavigate(Routes.AUTH) },
                 )
             }
@@ -317,6 +380,38 @@ fun MainApp(container: AppContainer) {
                 )
             }
         }
+        }
+    }
+}
+
+private fun navigateForTimelineEvent(navController: androidx.navigation.NavHostController, event: TimelineEventDto) {
+    val type = when (event.type) {
+        "APPOINTMENT" -> ResourceType.APPOINTMENTS
+        "MEASUREMENT" -> ResourceType.MEASUREMENTS
+        "SYMPTOM" -> ResourceType.SYMPTOMS
+        "MEDICATION" -> ResourceType.MEDICATIONS
+        "DOCUMENT" -> null
+        "IMAGE" -> null
+        else -> null
+    }
+    when (event.type) {
+        "DOCUMENT" -> navController.navigate(Routes.DOCUMENTS)
+        "IMAGE" -> navController.navigate(Routes.IMAGES)
+        else -> type?.let { navController.navigate(Routes.resource(it)) }
+    }
+}
+
+private fun navigateForSearchHit(navController: androidx.navigation.NavHostController, hit: SearchHitDto) {
+    when (hit.type) {
+        "ALLERGY" -> navController.navigate(Routes.resource(ResourceType.ALLERGIES))
+        "CONDITION" -> navController.navigate(Routes.resource(ResourceType.CONDITIONS))
+        "MEDICATION" -> navController.navigate(Routes.resource(ResourceType.MEDICATIONS))
+        "SYMPTOM" -> navController.navigate(Routes.resource(ResourceType.SYMPTOMS))
+        "MEASUREMENT" -> navController.navigate(Routes.resource(ResourceType.MEASUREMENTS))
+        "DOCTOR" -> navController.navigate(Routes.resource(ResourceType.DOCTORS))
+        "APPOINTMENT" -> navController.navigate(Routes.resource(ResourceType.APPOINTMENTS))
+        "DOCUMENT" -> navController.navigate(Routes.DOCUMENTS)
+        "IMAGE" -> navController.navigate(Routes.IMAGES)
     }
 }
 
@@ -349,6 +444,9 @@ private fun titleFor(route: String?, entry: NavBackStackEntry?): String = when (
     Routes.IMAGE_DETAIL -> "Zdjęcie"
     Routes.ASSISTANT -> "Asystent AI"
     Routes.SETTINGS -> "Ustawienia"
+    Routes.TIMELINE -> "Chronologia"
+    Routes.SEARCH -> "Szukaj"
+    Routes.CHARTS -> "Wykresy pomiarów"
     Routes.RESOURCE -> ResourceType.fromRoute(entry?.arguments?.getString("type")).title
     Routes.RESOURCE_NEW -> "Nowy wpis"
     Routes.RESOURCE_EDIT -> "Edytuj wpis"

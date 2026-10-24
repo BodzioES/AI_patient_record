@@ -10,7 +10,7 @@
   w PowerShellu jako administrator + restart). Bez tego silnik nie startuje:
   `engine linux/wsl failed to start: wsl is not installed`.
 - PowerShell lub terminal Linux/macOS.
-- Opcjonalnie: Android Studio — do pracy nad aplikacją Android (ETAP 2 ukończony).
+- Opcjonalnie: Android Studio — do pracy nad aplikacją Android (ETAP 3 ukończony).
 
 Sprawdzenie JDK:
 
@@ -176,7 +176,7 @@ backend/
     document/ image/
     storage/        FileStorageService, FileTypeValidator
     ai/
-      provider/     AiProvider, MockAiProvider
+      provider/     AiProvider, MockAiProvider, LmStudioAiProvider
       context/      PatientContextProvider, walidacja źródeł
       AiChatService.kt
       ImageAiAnalysisService.kt
@@ -279,11 +279,59 @@ git status
 
 Nie commituj prawdziwych danych medycznych, sekretów, tokenów ani haseł.
 
-## 11. Ograniczenia środowiska budowania
+## 11. Lokalny model AI (LM Studio)
+
+Backend domyślnie używa `MockAiProvider`. Aby podłączyć prawdziwy model:
+
+1. W LM Studio wczytaj model (np. `google/gemma-4-26b-a4b-qat`, wariant Q4_0)
+   z kontekstem 8192 i GPU offload na maksimum.
+2. Zakładka **Developer** → **Start Server**, port **1234**.
+3. Włącz **Serve on Local Network** (bind `0.0.0.0`). Bez tego serwer słucha
+   tylko na `127.0.0.1` i kontener Dockera go nie dosięgnie.
+   Alternatywa z terminala:
+   `& "$env:USERPROFILE\.lmstudio\bin\lms.exe" server start --port 1234 --bind 0.0.0.0`
+4. Sprawdź identyfikator modelu:
+   ```powershell
+   curl.exe http://localhost:1234/v1/models
+   ```
+5. W `.env` ustaw:
+   ```ini
+   AI_PROVIDER=lmstudio
+   LM_STUDIO_BASE_URL=http://host.docker.internal:1234/v1
+   LM_STUDIO_MODEL=google/gemma-4-26b-a4b-qat
+   AI_REASONING_EFFORT=none
+   AI_MAX_OUTPUT_TOKENS=2048
+   ```
+6. Przebuduj backend: `docker compose up -d --build backend`.
+
+Weryfikacja:
+
+```powershell
+# z wnętrza kontenera — czy backend widzi LM Studio
+docker exec patientcard-backend sh -c "wget -qO- http://host.docker.internal:1234/v1/models"
+# status dostawcy widziany przez aplikację (wymaga tokenu)
+curl.exe -H "Authorization: Bearer <token>" http://localhost:8080/api/v1/ai/status
+```
+
+Typowe problemy:
+
+| Objaw | Przyczyna / rozwiązanie |
+|---|---|
+| `Brak połączenia z modelem lokalnym` | serwer LM Studio nie działa albo brak `--bind 0.0.0.0` / „Serve on Local Network” |
+| `LM Studio nie znalazł modelu` | `LM_STUDIO_MODEL` nie odpowiada `id` z `/v1/models` albo model nie jest wczytany |
+| pusta odpowiedź, `finish_reason=length` | model rozumujący zużył budżet; ustaw `AI_REASONING_EFFORT=none` lub zwiększ `AI_MAX_OUTPUT_TOKENS` |
+| wolne odpowiedzi | model nie mieści się w VRAM — zmniejsz kontekst lub GPU offload |
+| `HTTP 413` przy analizie zdjęcia | plik większy niż model przyjmuje; zmniejsz zdjęcie lub `AI_MAX_VISION_IMAGE_BYTES` |
+
+Uruchamiając backend z IDE (nie z Dockera), ustaw
+`LM_STUDIO_BASE_URL=http://localhost:1234/v1`.
+
+## 12. Ograniczenia środowiska budowania
 
 - `git`, `docker` i systemowy `psql` nie były dostępne, więc push na GitHub oraz
   live start przez Docker Compose nie zostały wykonane w tej sesji.
 - Testy użyły prawdziwego PostgreSQL embedded, nie mocka bazy.
 - Aplikacja Android została zbudowana i przetestowana jednostkowo (28 testów JVM), ale
   nie była uruchamiana na emulatorze/telefonie w tym środowisku.
-- Rzeczywisty model AI nie był podłączany — działa `MockAiProvider`.
+- ETAP 4: model działa lokalnie w LM Studio; testy jednostkowe pozostawiono
+  użytkownikowi do samodzielnego uruchomienia.

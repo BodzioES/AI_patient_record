@@ -19,14 +19,20 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -64,6 +70,21 @@ fun ResourceListScreen(
     LaunchedEffect(Unit) { viewModel.load() }
     val state = viewModel.state.value
     var pendingDelete by remember { mutableStateOf<ResourceRow?>(null) }
+    var sortExpanded by remember { mutableStateOf(false) }
+    val sorts = ResourceListViewModel.sortsFor(type)
+    val currentSort = sorts.firstOrNull { it.value == state.sort } ?: sorts.first()
+    val visibleRows = remember(state.rows, state.filter) {
+        val query = state.filter.trim().lowercase()
+        if (query.isEmpty()) {
+            state.rows
+        } else {
+            state.rows.filter { row ->
+                row.summary.title.lowercase().contains(query) ||
+                    row.summary.subtitle.lowercase().contains(query) ||
+                    row.summary.status?.lowercase()?.contains(query) == true
+            }
+        }
+    }
 
     if (state.loading && state.rows.isEmpty()) {
         LoadingBox(label = "Pobieranie: ${type.title.lowercase()}…")
@@ -85,7 +106,7 @@ fun ResourceListScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        "${type.title} (${state.rows.size})",
+                        "${type.title} (${state.rows.size}/${state.total})",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f),
@@ -95,24 +116,91 @@ fun ResourceListScreen(
                     }
                 }
             }
+            item {
+                OutlinedTextField(
+                    value = state.filter,
+                    onValueChange = viewModel::setFilter,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Filtruj pobrane wpisy") },
+                    placeholder = { Text("np. penicylina, wizyta, aktywny") },
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                )
+            }
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "Sortowanie:",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Box {
+                        TextButton(onClick = { sortExpanded = true }) {
+                            Text(currentSort.label)
+                        }
+                        DropdownMenu(
+                            expanded = sortExpanded,
+                            onDismissRequest = { sortExpanded = false },
+                        ) {
+                            sorts.forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option.label) },
+                                    onClick = {
+                                        sortExpanded = false
+                                        viewModel.setSort(option.value)
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
             if (state.error != null) {
                 item { ErrorBanner(state.error, onRetry = viewModel::load) }
             }
-            if (state.rows.isEmpty()) {
+            if (visibleRows.isEmpty()) {
                 item {
                     EmptyState(
-                        title = "Brak wpisów",
-                        message = "Dodaj pierwszy wpis w sekcji „${type.title}”.",
+                        title = if (state.rows.isEmpty()) "Brak wpisów" else "Brak dopasowań",
+                        message = if (state.rows.isEmpty()) {
+                            "Dodaj pierwszy wpis w sekcji „${type.title}”."
+                        } else {
+                            "Żaden z pobranych wpisów nie zawiera „${state.filter.trim()}”."
+                        },
                     )
                 }
             } else {
-                items(state.rows, key = { it.id }) { row ->
+                items(visibleRows, key = { it.id }) { row ->
                     ResourceCard(
                         row = row,
                         deleting = state.deletingId == row.id,
                         onEdit = { onEdit(row.id) },
                         onDelete = { pendingDelete = row },
                     )
+                }
+            }
+            if (!state.last) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (state.loadingMore) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.width(24.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            OutlinedButton(onClick = viewModel::loadMore) {
+                                Text("Pokaż więcej (${state.rows.size}/${state.total})")
+                            }
+                        }
+                    }
                 }
             }
             item { Spacer(Modifier.height(88.dp)) }
