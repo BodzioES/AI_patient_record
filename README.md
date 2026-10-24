@@ -49,7 +49,7 @@ Wersje są zapisane w `backend/build.gradle.kts` i `backend/gradle/wrapper/gradl
   app/                         # aplikacja Android (Compose) — ETAP 2
     src/main/java/com/example/ar_project_1/
       data/                    # modele, API, sesja, repozytorium, upload, katalog formularzy
-      ui/                      # auth, setup, home, profil, zasoby, dokumenty, zdjęcia, asystent, ustawienia
+      ui/                      # welcome, auth, home, profil, zasoby, dokumenty, zdjęcia, asystent, ustawienia
       AppContainer.kt          # ręczne wstrzykiwanie zależności
     src/test/                  # testy jednostkowe JVM
   docs/                        # architektura, baza, API, AI, bezpieczeństwo, Android, roadmapa
@@ -168,19 +168,21 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 .\gradlew.bat :app:assembleDebug :app:testDebugUnitTest
 ```
 
-Stan na tej sesji: **28 testów JVM, 0 błędów**, `BUILD SUCCESSFUL`.
+Stan na tej sesji: **31 testów JVM, 0 błędów**, `BUILD SUCCESSFUL`.
 APK debug: `app/build/outputs/apk/debug/app-debug.apk`.
 Raport: `app/build/reports/tests/testDebugUnitTest/index.html`.
 
-Testy obejmują normalizację adresu serwera, parser błędów API, konwersję dat oraz
-budowanie i walidację żądań CRUD. Testy instrumentowane (`app/src/androidTest`) wymagają
-emulatora lub telefonu i nie były uruchamiane w tym środowisku.
+Testy obejmują normalizację adresu serwera, wybór adresu backendu (emulator/telefon),
+parser błędów API, konwersję dat oraz budowanie i walidację żądań CRUD. Testy
+instrumentowane (`app/src/androidTest`) wymagają emulatora lub telefonu i nie były
+uruchamiane w tym środowisku.
 
 ## 5. Aplikacja Android (ETAP 2)
 
 ### 5.1. Funkcje
 
-- konfiguracja adresu backendu przy pierwszym uruchomieniu (bez hardkodowanego IP),
+- automatyczne wykrywanie adresu backendu (bez wpisywania IP i portu),
+- ekran powitalny przy pierwszym uruchomieniu,
 - logowanie i rejestracja, automatyczne odświeżanie tokenu przy `401`,
 - szyfrowanie tokenów i adresu serwera kluczem AES-GCM z Android Keystore,
 - profil pacjenta: podgląd i edycja,
@@ -188,13 +190,14 @@ emulatora lub telefonu i nie były uruchamiane w tym środowisku.
 - dokumenty: upload (PDF/JPG/PNG), pobranie i otwarcie, usuwanie,
 - zdjęcia: upload, podgląd w aplikacji, usuwanie, analiza MOCK,
 - asystent AI: czat MOCK, historia rozmów, źródła, wyraźne oznaczenie MOCK,
-- ustawienia: zmiana serwera, wylogowanie, czyszczenie pamięci podręcznej,
+- ustawienia: wylogowanie, czyszczenie pamięci podręcznej, informacje o aplikacji,
 - komunikaty błędów po polsku, stany ładowania i puste.
 
 ### 5.2. Uruchomienie
 
 1. Uruchom backend na PC (sekcja 3.1 — Docker — albo 3.2 — Gradle).
-2. Sprawdź adres PC w sieci Wi-Fi: `ipconfig` (np. `192.168.1.10`).
+2. Podłącz telefon i przekieruj port: `adb reverse tcp:8080 tcp:8080`
+   (emulator nie potrzebuje `adb reverse`).
 3. Zbuduj i zainstaluj APK:
 
 ```powershell
@@ -202,9 +205,13 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 .\gradlew.bat :app:installDebug
 ```
 
-4. W aplikacji podaj `http://192.168.1.10:8080` (emulator: `http://10.0.2.2:8080`).
-5. Telefon i PC muszą być w tej samej sieci. Backend musi nasłuchiwać na interfejsie
-   sieciowym, nie tylko `localhost`.
+4. Otwórz aplikację — adres serwera ustawia się sam (`127.0.0.1:8080` na telefonie,
+   `10.0.2.2:8080` w emulatorze). Nie ma pola do wpisywania adresu.
+5. Pierwsze uruchomienie pokazuje ekran powitalny; „Kontynuuj” przechodzi do logowania.
+
+Jeśli telefon ma łączyć się przez Wi-Fi zamiast `adb reverse`, musi być w tej samej
+sieci co PC, a backend musi nasłuchiwać na interfejsie sieciowym. Automatyczne
+wykrywanie sprawdza wtedy tylko `127.0.0.1` i `10.0.2.2`.
 
 Szczegóły implementacji i ograniczenia: [`docs/android.md`](docs/android.md).
 

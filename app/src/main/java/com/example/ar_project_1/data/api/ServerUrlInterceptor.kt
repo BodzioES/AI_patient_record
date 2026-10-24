@@ -9,7 +9,7 @@ import java.io.IOException
 class ServerUrlInterceptor(private val sessionManager: SessionManager) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val serverUrl = sessionManager.current().serverUrl
-            ?: throw IOException("Najpierw ustaw adres serwera w Ustawieniach.")
+            ?: throw IOException("Nie wykryto adresu serwera. Sprawdź połączenie z siecią.")
         val base = serverUrl.toHttpUrlOrNull()
             ?: throw IOException("Nieprawidłowy adres serwera.")
         val original = chain.request().url

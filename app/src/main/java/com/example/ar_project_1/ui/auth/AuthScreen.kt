@@ -2,7 +2,6 @@ package com.example.ar_project_1.ui.auth
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,7 +24,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,10 +44,7 @@ import com.example.ar_project_1.AppContainer
 import com.example.ar_project_1.ui.common.ErrorBanner
 
 @Composable
-fun AuthScreen(
-    container: AppContainer,
-    onChangeServer: () -> Unit,
-) {
+fun AuthScreen(container: AppContainer) {
     val viewModel: AuthViewModel = viewModel(
         factory = viewModelFactory {
             initializer { AuthViewModel(container.repository) }
@@ -173,18 +168,10 @@ fun AuthScreen(
         }
 
         Spacer(Modifier.height(16.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "Serwer: ${com.example.ar_project_1.data.api.ServerUrl.display(container.sessionManager.current().serverUrl)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            TextButton(onClick = onChangeServer) { Text("Zmień") }
-        }
         Text(
             "To projekt studencki, nie produkt medyczny.",
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.outline,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
     }

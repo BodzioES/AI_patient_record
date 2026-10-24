@@ -55,17 +55,26 @@ korzysta z jednego ekranu listy i formularza. Różnice opisuje `ResourceCatalog
 (etykiety, typy pól, listy wartości, sposób prezentacji). Żądania buduje
 `RecordRequestBuilder`, który waliduje wymagane pola, liczby i daty.
 
-## 4. Adres backendu
+## 4. Adres backendu (automatyczny)
 
-- Pole tekstowe przyjmuje `host:port`, `http://host:port` lub pełny URL.
+- Użytkownik **nie wpisuje** adresu serwera — nie ma już ekranu `setup` ani sekcji
+  „Serwer” w Ustawieniach.
+- `ServerAutoConfig` przy starcie sprawdza `GET /actuator/health` na liście kandydatów:
+  - emulator: `http://10.0.2.2:8080`, potem `http://127.0.0.1:8080`,
+  - telefon: `http://127.0.0.1:8080` (przez `adb reverse`), potem `http://10.0.2.2:8080`.
+- Wygrywa pierwszy adres, który odpowie; jest zapisywany w zaszyfrowanej sesji.
+- Jeśli zapisany adres nadal odpowiada, nie jest zmieniany (tokeny zostają).
+  Gdy przestanie odpowiadać (np. stary port), aplikacja podmienia go na wykryty.
+- Gdy żaden adres nie odpowiada, zostaje pierwszy kandydat, a użytkownik widzi
+  normalny błąd połączenia przy logowaniu — start aplikacji nie jest blokowany.
 - `ServerUrl.normalize` sprowadza wartość do `http(s)://host:port/api/v1/`.
-- Adres jest zapisywany w zaszyfrowanej sesji.
 - Zmiana adresu **czyści tokeny** — tokeny są związane z konkretnym serwerem.
 - `ServerUrlInterceptor` przepisuje host/port każdego żądania, zachowując ścieżkę
-  `/api/v1/...`; dzięki temu Retrofit ma stały `baseUrl`, a użytkownik może zmienić
-  serwer bez restartu aplikacji.
+  `/api/v1/...`; dzięki temu Retrofit ma stały `baseUrl`, a adres może się zmienić
+  bez restartu aplikacji.
 
-Emulator: `http://10.0.2.2:8080`. Telefon: `http://<IP_PC>:8080`.
+Emulator: `http://10.0.2.2:8080`. Telefon: `adb reverse tcp:8080 tcp:8080` i
+`http://127.0.0.1:8080`.
 
 ## 5. Uwierzytelnianie i sesja
 
@@ -95,7 +104,7 @@ Emulator: `http://10.0.2.2:8080`. Telefon: `http://<IP_PC>:8080`.
 
 | Trasa | Ekran |
 |---|---|
-| `setup` | adres backendu (pierwsze uruchomienie / zmiana) |
+| `welcome` | ekran powitalny (tylko przy pierwszym uruchomieniu) |
 | `auth` | logowanie i rejestracja |
 | `home` | karta pacjenta, liczby wpisów, skróty |
 | `profile`, `profile/edit` | podgląd i edycja profilu |
@@ -104,9 +113,12 @@ Emulator: `http://10.0.2.2:8080`. Telefon: `http://<IP_PC>:8080`.
 | `documents` | lista, upload, pobranie, usunięcie |
 | `images`, `images/{imageId}` | lista, upload, podgląd, analiza MOCK |
 | `assistant` | czat MOCK, historia, źródła |
-| `settings` | konto, serwer, cache, informacje |
+| `settings` | konto, cache, informacje |
 
-Dolna nawigacja: Start, Dokumenty, Zdjęcia, Asystent, Ustawienia.
+Dolna nawigacja (bez podpisów): Dokumenty, Asystent, **Start**, Zdjęcia, Ustawienia.
+
+Ekran powitalny (`UiPreferences.welcomeSeen`) pokazuje się tylko raz, przed
+logowaniem; „Kontynuuj” zapisuje flagę i przechodzi do logowania lub karty pacjenta.
 
 ## 8. Tryb MOCK AI
 
@@ -141,7 +153,7 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 
 - APK: `app/build/outputs/apk/debug/app-debug.apk`
 - Raport testów: `app/build/reports/tests/testDebugUnitTest/index.html`
-- Stan tej sesji: 28 testów JVM, 0 błędów, `BUILD SUCCESSFUL`.
+- Stan tej sesji: 31 testów JVM, 0 błędów, `BUILD SUCCESSFUL`.
 - Testy instrumentowane (`app/src/androidTest`) wymagają emulatora/telefonu; nie były
   uruchamiane.
 
@@ -152,8 +164,8 @@ budowanie JSON). Klasy zależne od `Context`/Keystore nie mają testów JVM.
 
 | Objaw | Przyczyna / rozwiązanie |
 |---|---|
-| „Brak połączenia z serwerem” | zły IP/port, inna sieć Wi-Fi, backend nie działa, firewall Windows blokuje 8080 |
-| Działa na emulatorze, nie na telefonie | użyj IP PC, nie `localhost`; zezwól Javie na ruch w zaporze |
+| „Brak połączenia z serwerem” | backend nie działa, brak `adb reverse tcp:8080 tcp:8080`, firewall Windows blokuje 8080 |
+| Działa na emulatorze, nie na telefonie | brak `adb reverse`; ewentualnie użyj Wi-Fi i IP PC oraz zezwól Javie na ruch w zaporze |
 | „Sesja wygasła” | refresh wygasł/unieważniony — zaloguj się ponownie |
 | „Plik jest za duży” | limit 25 MB |
 | Brak aplikacji do otwarcia pliku | zainstaluj przeglądarkę PDF / galerię |

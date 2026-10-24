@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Image
@@ -37,6 +39,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -70,6 +76,7 @@ fun HomeScreen(
     )
     LaunchedEffect(Unit) { viewModel.load() }
     val state = viewModel.state.value
+    var privacyDismissed by rememberSaveable { mutableStateOf(false) }
 
     if (state.loading && state.patient == null) {
         LoadingBox(label = "Pobieranie karty pacjenta…")
@@ -80,22 +87,24 @@ fun HomeScreen(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        if (!privacyDismissed) {
+            item {
+                PrivacyNote(onDismiss = { privacyDismissed = true })
+            }
+        }
+        if (state.error != null) {
+            item { ErrorBanner(state.error, onRetry = viewModel::load) }
+        }
         item {
-            Spacer(Modifier.height(8.dp))
             PatientHeader(
                 patient = state.patient,
                 onProfile = onProfile,
                 onRefresh = viewModel::load,
                 refreshing = state.loading,
             )
-        }
-        if (state.error != null) {
-            item { ErrorBanner(state.error, onRetry = viewModel::load) }
-        }
-        item {
-            PrivacyNote()
         }
         item {
             Text(
@@ -130,36 +139,33 @@ fun HomeScreen(
             )
         }
         item {
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 FeatureTile(
                     title = "Dokumenty",
                     subtitle = "PDF i zdjęcia dokumentów",
                     icon = Icons.Default.Description,
                     onClick = onDocuments,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                 )
                 FeatureTile(
                     title = "Zdjęcia",
                     subtitle = "Zdjęcia zmian i ran",
                     icon = Icons.Default.Image,
                     onClick = onImages,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                FeatureTile(
+                    title = "Asystent AI (MOCK)",
+                    subtitle = "Szkielet czatu — bez rzeczywistej analizy medycznej",
+                    icon = Icons.Default.SmartToy,
+                    onClick = onAssistant,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
-        item {
-            FeatureTile(
-                title = "Asystent AI (MOCK)",
-                subtitle = "Szkielet czatu — bez rzeczywistej analizy medycznej",
-                icon = Icons.Default.SmartToy,
-                onClick = onAssistant,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        item { Spacer(Modifier.height(24.dp)) }
     }
 }
 
@@ -224,13 +230,16 @@ private fun PatientHeader(
 }
 
 @Composable
-private fun PrivacyNote() {
+private fun PrivacyNote(onDismiss: () -> Unit) {
     Surface(
         color = MaterialTheme.colorScheme.tertiaryContainer,
         shape = MaterialTheme.shapes.medium,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Icon(
                 Icons.Default.Warning,
                 contentDescription = null,
@@ -241,7 +250,15 @@ private fun PrivacyNote() {
                 "Dane pozostają na Twoim serwerze. To projekt studencki, nie produkt medyczny.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onTertiaryContainer,
+                modifier = Modifier.weight(1f),
             )
+            IconButton(onClick = onDismiss) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "Zamknij komunikat",
+                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+            }
         }
     }
 }
@@ -282,11 +299,11 @@ private fun FeatureTile(
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Surface(
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.secondaryContainer,
+                color = MaterialTheme.colorScheme.primaryContainer,
                 modifier = Modifier.size(44.dp),
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                    Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 }
             }
             Spacer(Modifier.size(12.dp))
