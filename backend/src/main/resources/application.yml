@@ -1,0 +1,88 @@
+spring:
+  application:
+    name: patient-card
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/patientcard}
+    username: ${DB_USERNAME:patientcard}
+    password: ${DB_PASSWORD:patientcard}
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 10000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        format_sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  servlet:
+    multipart:
+      max-file-size: ${MAX_FILE_SIZE:25MB}
+      max-request-size: ${MAX_REQUEST_SIZE:30MB}
+  data:
+    web:
+      pageable:
+        default-page-size: 20
+        max-page-size: 100
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-message: never
+    include-stacktrace: never
+
+app:
+  storage:
+    root: ${STORAGE_ROOT:../storage}
+    max-file-size-bytes: ${MAX_FILE_SIZE_BYTES:26214400}
+  ai:
+    provider: ${AI_PROVIDER:mock}
+    lm-studio-base-url: ${LM_STUDIO_BASE_URL:http://localhost:1234/v1}
+    lm-studio-model: ${LM_STUDIO_MODEL:local-model}
+    model-version: ${LM_STUDIO_MODEL_VERSION:}
+    connect-timeout: ${AI_CONNECT_TIMEOUT:PT10S}
+    request-timeout: ${AI_REQUEST_TIMEOUT:PT2M}
+    max-context-chars: ${AI_MAX_CONTEXT_CHARS:8000}
+    max-context-items-per-category: ${AI_MAX_CONTEXT_ITEMS:10}
+    temperature: ${AI_TEMPERATURE:0.2}
+    max-output-tokens: ${AI_MAX_OUTPUT_TOKENS:800}
+  jwt:
+    # Development-only fallback. Always provide JWT_SECRET in real deployments.
+    secret: ${JWT_SECRET:dev-only-insecure-secret-change-me-32-bytes-minimum}
+    access-token-ttl: ${JWT_ACCESS_TTL:PT15M}
+    refresh-token-ttl: ${JWT_REFRESH_TTL:P30D}
+    issuer: patient-card
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+  api-docs:
+    path: /v3/api-docs
+
+logging:
+  level:
+    root: INFO
+    com.patientcard: INFO
+    org.hibernate.SQL: WARN
+    org.springframework.security: WARN

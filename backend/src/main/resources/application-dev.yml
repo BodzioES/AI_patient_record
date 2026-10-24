@@ -1,0 +1,10 @@
+# Local development profile. Do not use these values in production.
+spring:
+  jpa:
+    properties:
+      hibernate:
+        format_sql: true
+logging:
+  level:
+    com.patientcard: DEBUG
+    org.hibernate.SQL: DEBUG

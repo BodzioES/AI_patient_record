@@ -1,0 +1,36 @@
+# Android / Gradle
+*.iml
+.gradle
+/build
+/app/build
+/backend/build
+/backend/.gradle
+/backend/.kotlin
+/.kotlin
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# IDE
+/.idea
+/.vscode
+*.hprof
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+*.p12
+
+# Local medical files and runtime data
+/storage/*
+!/storage/.gitkeep
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db

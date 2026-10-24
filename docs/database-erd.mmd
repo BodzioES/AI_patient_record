@@ -1,0 +1,35 @@
+%% Private AI Patient Card - ETAP 1
+%% Source of truth: backend/src/main/resources/db/migration/V1__initial_schema.sql
+%% Render with Mermaid (IDE preview, https://mermaid.live, or mermaid-cli).
+
+erDiagram
+    users ||--o| patient_profiles : "posiada kartę"
+    users ||--o{ refresh_tokens : "ma sesje"
+
+    patient_profiles ||--|| patient_image_counters : "licznik zdjęć"
+    patient_profiles ||--o{ doctors : "lekarze"
+    patient_profiles ||--o{ medical_documents : "dokumenty"
+    patient_profiles ||--o{ medical_conditions : "schorzenia"
+    patient_profiles ||--o{ allergies : "alergie"
+    patient_profiles ||--o{ symptoms : "objawy"
+    patient_profiles ||--o{ medications : "leki"
+    patient_profiles ||--o{ appointments : "wizyty"
+    patient_profiles ||--o{ measurements : "pomiary"
+    patient_profiles ||--o{ medical_images : "zdjęcia"
+    patient_profiles ||--o{ chat_conversations : "rozmowy AI"
+    patient_profiles ||--o{ ai_processing_jobs : "zadania AI"
+
+    doctors |o--o{ medications : "przepisuje (opcjonalnie)"
+    doctors |o--o{ appointments : "prowadzi (opcjonalnie)"
+
+    medications ||--o{ medication_intake_logs : "historia przyjęć"
+
+    symptoms |o--o{ medical_images : "dotyczy (opcjonalnie)"
+    medical_documents |o--o{ medical_images : "źródło (opcjonalnie)"
+    medical_documents |o--o{ medical_conditions : "źródło (opcjonalnie)"
+
+    medical_images ||--o{ image_ai_analyses : "wyniki analiz"
+    medical_documents ||--o{ medical_document_extractions : "ekstrakcje treści"
+
+    chat_conversations ||--o{ chat_messages : "wiadomości"
+    chat_messages ||--o{ ai_message_sources : "źródła odpowiedzi"

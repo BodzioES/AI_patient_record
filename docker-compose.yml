@@ -1,0 +1,29 @@
+# Local PostgreSQL for the Private AI Patient Card backend.
+# Usage:
+#   1. copy .env.example to .env and change POSTGRES_PASSWORD / JWT_SECRET
+#   2. docker compose up -d
+#   3. cd backend && ./gradlew bootRun
+#
+# PostgreSQL is intentionally bound to 127.0.0.1 only. Do not expose it to the
+# local network or the internet.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: patientcard-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-patientcard}
+      POSTGRES_USER: ${POSTGRES_USER:-patientcard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - patientcard_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-patientcard} -d ${POSTGRES_DB:-patientcard}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  patientcard_pgdata:

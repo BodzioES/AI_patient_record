@@ -1,0 +1,41 @@
+package com.patientcard.entity
+
+enum class Sex { FEMALE, MALE, OTHER, UNKNOWN }
+
+enum class BloodType { A_POSITIVE, A_NEGATIVE, B_POSITIVE, B_NEGATIVE, AB_POSITIVE, AB_NEGATIVE, ZERO_POSITIVE, ZERO_NEGATIVE, UNKNOWN }
+
+enum class AllergySeverity { MILD, MODERATE, SEVERE, LIFE_THREATENING, UNKNOWN }
+
+enum class AllergyStatus { ACTIVE, RESOLVED, SUSPECTED }
+
+enum class ConditionStatus { ACTIVE, IN_REMISSION, RESOLVED, SUSPECTED }
+
+enum class ConditionOrigin { PATIENT_REPORTED, CLINICIAN_DOCUMENTED, IMPORTED }
+
+enum class MedicationStatus { ACTIVE, PAUSED, STOPPED, COMPLETED }
+
+enum class IntakeStatus { TAKEN, SKIPPED, UNKNOWN }
+
+enum class AppointmentStatus { SCHEDULED, COMPLETED, CANCELLED, MISSED }
+
+enum class SymptomStatus { ACTIVE, RESOLVED, MONITORING }
+
+enum class MeasurementType { BLOOD_PRESSURE, HEART_RATE, WEIGHT, TEMPERATURE, GLUCOSE, OXYGEN_SATURATION, OTHER }
+
+enum class MeasurementSource { MANUAL, DEVICE, IMPORTED, UNKNOWN }
+
+enum class DocumentType { LAB_RESULT, REFERRAL, DISCHARGE_SUMMARY, PRESCRIPTION, IMAGING, OTHER }
+
+enum class DocumentProcessingStatus { PENDING, PROCESSING, COMPLETED, FAILED, NOT_REQUIRED }
+
+enum class ImageCategory { SKIN, INJURY, MEDICATION_PACKAGE, DOCUMENT, OTHER }
+
+enum class AiProcessingStatus { PENDING, PROCESSING, COMPLETED, FAILED, NOT_REQUIRED }
+
+enum class ChatRole { USER, ASSISTANT, SYSTEM }
+
+enum class AiSourceType { IMAGE, DOCUMENT, SYMPTOM, MEDICATION, APPOINTMENT, MEASUREMENT, CONDITION }
+
+enum class AiJobStatus { PENDING, RUNNING, COMPLETED, FAILED, CANCELLED }
+
+enum class ExtractionStatus { PENDING, PROCESSING, COMPLETED, FAILED }
