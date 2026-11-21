@@ -147,6 +147,8 @@ poszczególne testy, a przy błędzie także jego treść.
 | Backend: `DefaultPatientContextProviderTest` | 2 | jakie dane z karty trafiają do modelu AI |
 | Backend: `MigrationIntegrationTest` | 2 | schemat bazy po migracjach |
 
+Pełny opis wszystkich testów: [`docs/testy.md`](docs/testy.md).
+
 Jakość odpowiedzi prawdziwego modelu testuje się ręcznie:
 [`docs/scenariusz-testowy-ai.md`](docs/scenariusz-testowy-ai.md).
 
@@ -213,6 +215,7 @@ Szczegóły: [`docs/security.md`](docs/security.md).
 [`development`](docs/development.md) ·
 [`android`](docs/android.md) ·
 [`roadmap`](docs/roadmap.md) ·
-[`scenariusz testów AI`](docs/scenariusz-testowy-ai.md)
+[`scenariusz testów AI`](docs/scenariusz-testowy-ai.md) ·
+[`testy`](docs/testy.md)
 
 Następny etap (ETAP 5): OCR dokumentów, kolejka zadań AI, wersjonowanie promptów.
