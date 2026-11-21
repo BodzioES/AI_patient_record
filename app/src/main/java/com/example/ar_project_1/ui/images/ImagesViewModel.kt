@@ -1,18 +1,13 @@
 package com.example.ar_project_1.ui.images
 
-import android.graphics.BitmapFactory
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.ar_project_1.data.api.AppException
 import com.example.ar_project_1.data.model.ImageDto
 import com.example.ar_project_1.data.repository.PatientCardRepository
 import com.example.ar_project_1.data.upload.PickedFile
-import com.google.gson.JsonObject
-import kotlinx.coroutines.Dispatchers
+import com.example.ar_project_1.ui.common.RemoteImageLoader
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 data class ImagesUiState(
     val images: List<ImageDto> = emptyList(),
@@ -35,9 +30,21 @@ data class ImageSeries(
     val images: List<ImageDto>,
 )
 
-class ImagesViewModel(private val repository: PatientCardRepository) : ViewModel() {
+/** Pola formularza dodawania zdjęcia. */
+data class ImageUploadForm(
+    val title: String = "",
+    val description: String = "",
+    val category: String = ImagesViewModel.CATEGORIES.first(),
+    val symptomId: String = "",
+    val capturedAt: String = "",
+)
 
-    var state = androidx.compose.runtime.mutableStateOf(ImagesUiState())
+class ImagesViewModel(
+    private val repository: PatientCardRepository,
+    private val imageLoader: RemoteImageLoader,
+) : ViewModel() {
+
+    var state = mutableStateOf(ImagesUiState())
         private set
 
     fun setCategory(category: String?) {
@@ -52,103 +59,85 @@ class ImagesViewModel(private val repository: PatientCardRepository) : ViewModel
         if (state.value.loading) return
         state.value = state.value.copy(loading = true, error = null)
         viewModelScope.launch {
-            try {
-                val page = repository.images(page = 0, size = 100)
-                state.value = state.value.copy(images = page.content, loading = false, error = null)
-            } catch (e: AppException) {
-                state.value = state.value.copy(loading = false, error = e.message)
+            state.value = try {
+                state.value.copy(images = fetchAll(), loading = false)
             } catch (e: Exception) {
-                state.value = state.value.copy(
-                    loading = false,
-                    error = e.message ?: "Nie udało się pobrać zdjęć.",
-                )
+                state.value.copy(loading = false, error = e.message ?: "Nie udało się pobrać zdjęć.")
             }
         }
     }
 
-    fun upload(
-        picked: PickedFile,
-        title: String,
-        description: String,
-        category: String,
-        symptomId: String,
-        capturedAt: String,
-    ) {
+    fun upload(picked: PickedFile, form: ImageUploadForm) {
         val current = state.value
         if (current.uploading) return
-        if (picked.sizeBytes <= 0L) {
-            state.value = current.copy(uploadError = "Nie można odczytać wybranego pliku.")
+        val error = validate(picked, form)
+        if (error != null) {
+            state.value = current.copy(uploadError = error)
             return
         }
-        if (picked.sizeBytes > PatientCardRepository.MAX_FILE_BYTES) {
-            state.value = current.copy(uploadError = "Plik jest za duży. Maksymalny rozmiar to 25 MB.")
-            return
-        }
-        val captured = capturedAt.trim()
-        if (captured.isNotEmpty() && !DATE_TIME_PATTERN.matches(captured)) {
-            state.value = current.copy(
-                uploadError = "Data wykonania musi mieć format RRRR-MM-DD GG:MM.",
-            )
-            return
-        }
-
         state.value = current.copy(uploading = true, uploadError = null)
         viewModelScope.launch {
-            try {
+            state.value = try {
                 repository.uploadImage(
                     picked = picked,
-                    title = title.trim().takeIf { it.isNotEmpty() },
-                    description = description.trim().takeIf { it.isNotEmpty() },
-                    category = category,
-                    symptomId = symptomId.trim().takeIf { it.isNotEmpty() },
-                    capturedAt = captured.takeIf { it.isNotEmpty() },
+                    title = form.title.trim().ifEmpty { null },
+                    description = form.description.trim().ifEmpty { null },
+                    category = form.category,
+                    symptomId = form.symptomId.trim().ifEmpty { null },
+                    capturedAt = form.capturedAt.trim().ifEmpty { null },
                 )
-                val page = repository.images(page = 0, size = 100)
-                state.value = state.value.copy(
-                    images = page.content,
+                state.value.copy(
+                    images = fetchAll(),
                     uploading = false,
                     uploadCompleted = true,
                     message = "Zdjęcie zostało dodane.",
                 )
-            } catch (e: AppException) {
-                state.value = state.value.copy(uploading = false, uploadError = e.message)
             } catch (e: Exception) {
-                state.value = state.value.copy(
-                    uploading = false,
-                    uploadError = e.message ?: "Nie udało się wysłać zdjęcia.",
-                )
+                state.value.copy(uploading = false, uploadError = e.message ?: "Nie udało się wysłać zdjęcia.")
             }
         }
     }
 
     fun consumeUploadCompleted() {
-        state.value = state.value.copy(uploadCompleted = false)
+        state.value = state.value.copy(uploadCompleted = false, uploadError = null)
     }
 
     fun delete(image: ImageDto) {
         if (state.value.busyId != null) return
         state.value = state.value.copy(busyId = image.id, error = null, message = null)
         viewModelScope.launch {
-            try {
+            state.value = try {
                 repository.deleteImage(image.id)
-                state.value = state.value.copy(
+                imageLoader.evict(image.id)
+                state.value.copy(
                     busyId = null,
                     images = state.value.images.filterNot { it.id == image.id },
                     message = "Zdjęcie zostało usunięte.",
                 )
-            } catch (e: AppException) {
-                state.value = state.value.copy(busyId = null, error = e.message)
             } catch (e: Exception) {
-                state.value = state.value.copy(
-                    busyId = null,
-                    error = e.message ?: "Nie udało się usunąć zdjęcia.",
-                )
+                state.value.copy(busyId = null, error = e.message ?: "Nie udało się usunąć zdjęcia.")
             }
+        }
+    }
+
+    private suspend fun fetchAll(): List<ImageDto> = repository.images(page = 0, size = 100).content
+
+    private fun validate(picked: PickedFile, form: ImageUploadForm): String? {
+        val captured = form.capturedAt.trim()
+        return when {
+            picked.sizeBytes <= 0L -> "Nie można odczytać wybranego pliku."
+            picked.sizeBytes > PatientCardRepository.MAX_FILE_BYTES ->
+                "Plik jest za duży. Maksymalny rozmiar to 25 MB."
+            captured.isNotEmpty() && !DATE_TIME_PATTERN.matches(captured) ->
+                "Data wykonania musi mieć format RRRR-MM-DD GG:MM."
+            else -> null
         }
     }
 
     companion object {
         val CATEGORIES = listOf("SKIN", "INJURY", "MEDICATION_PACKAGE", "DOCUMENT", "OTHER")
+
+        private val DATE_TIME_PATTERN = Regex("^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}$")
 
         /**
          * Dzieli zdjęcia na serie: wspólny `symptomId` oznacza jedną serię,
@@ -157,131 +146,17 @@ class ImagesViewModel(private val repository: PatientCardRepository) : ViewModel
         fun groupIntoSeries(images: List<ImageDto>): List<ImageSeries> =
             images.groupBy { it.symptomId ?: "single-${it.id}" }
                 .map { (key, items) ->
-                    val sorted = items.sortedByDescending { it.capturedAt ?: it.uploadedAt.orEmpty() }
-                    val title = sorted.firstOrNull()?.title?.takeIf { it.isNotBlank() }
-                        ?: sorted.firstOrNull()?.let { "Zdjęcie #${it.imageNumber}" }
-                        ?: "Zdjęcie"
+                    val sorted = items.sortedByDescending { it.sortKey() }
+                    val first = sorted.first()
+                    val title = first.title?.takeIf { it.isNotBlank() } ?: "Zdjęcie #${first.imageNumber}"
                     ImageSeries(
                         key = key,
                         title = if (key.startsWith("single-")) title else "Seria: $title",
                         images = sorted,
                     )
                 }
-                .sortedByDescending { series ->
-                    series.images.firstOrNull()?.let { it.capturedAt ?: it.uploadedAt.orEmpty() }.orEmpty()
-                }
+                .sortedByDescending { it.images.first().sortKey() }
 
-        private val DATE_TIME_PATTERN = Regex("^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}$")
+        private fun ImageDto.sortKey(): String = capturedAt ?: uploadedAt.orEmpty()
     }
 }
-
-data class ImageAnalysisUi(
-    val text: String,
-    val modelName: String,
-    val modelVersion: String?,
-    val mock: Boolean,
-    val notice: String,
-)
-
-data class ImageDetailUiState(
-    val image: ImageBitmap? = null,
-    val loading: Boolean = true,
-    val error: String? = null,
-    val analyzing: Boolean = false,
-    val analysisError: String? = null,
-    val analysis: ImageAnalysisUi? = null,
-)
-
-class ImageDetailViewModel(
-    private val repository: PatientCardRepository,
-    private val imageId: String,
-) : ViewModel() {
-
-    var state = androidx.compose.runtime.mutableStateOf(ImageDetailUiState())
-        private set
-
-    init {
-        loadImage()
-    }
-
-    fun loadImage() {
-        state.value = state.value.copy(loading = true, error = null)
-        viewModelScope.launch {
-            try {
-                val bytes = repository.downloadImage(imageId)
-                val bitmap = withContext(Dispatchers.Default) {
-                    decodeSampled(bytes)?.asImageBitmap()
-                }
-                if (bitmap == null) {
-                    state.value = state.value.copy(
-                        loading = false,
-                        error = "Nie można zdekodować obrazu.",
-                    )
-                } else {
-                    state.value = state.value.copy(image = bitmap, loading = false)
-                }
-            } catch (e: AppException) {
-                state.value = state.value.copy(loading = false, error = e.message)
-            } catch (e: Exception) {
-                state.value = state.value.copy(
-                    loading = false,
-                    error = e.message ?: "Nie udało się pobrać zdjęcia.",
-                )
-            }
-        }
-    }
-
-    fun analyze() {
-        if (state.value.analyzing) return
-        state.value = state.value.copy(analyzing = true, analysisError = null)
-        viewModelScope.launch {
-            try {
-                val json = repository.analyzeImage(imageId)
-                val analysis = json.toAnalysis()
-                state.value = state.value.copy(analyzing = false, analysis = analysis)
-            } catch (e: AppException) {
-                state.value = state.value.copy(analyzing = false, analysisError = e.message)
-            } catch (e: Exception) {
-                state.value = state.value.copy(
-                    analyzing = false,
-                    analysisError = e.message ?: "Nie udało się wykonać analizy.",
-                )
-            }
-        }
-    }
-
-    private fun JsonObject.toAnalysis(): ImageAnalysisUi {
-        fun text(key: String): String? = get(key)
-            ?.takeUnless { it.isJsonNull }
-            ?.asString
-            ?.takeIf { it.isNotBlank() }
-
-        return ImageAnalysisUi(
-            text = text("analysisText") ?: "Brak treści analizy.",
-            modelName = text("modelName") ?: "mock",
-            modelVersion = text("modelVersion"),
-            mock = get("mock")?.takeUnless { it.isJsonNull }?.asBoolean ?: true,
-            notice = text("notice")
-                ?: "Wynik demonstracyjny. To nie jest diagnoza medyczna.",
-        )
-    }
-}
-
-/**
- * Decodes a gallery photo with subsampling so a 12 MP JPEG does not allocate a
- * 48 MB bitmap on low-memory devices.
- */
-private fun decodeSampled(bytes: ByteArray): android.graphics.Bitmap? {
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-
-    var sample = 1
-    while (bounds.outWidth / sample > MAX_DECODE_SIDE || bounds.outHeight / sample > MAX_DECODE_SIDE) {
-        sample *= 2
-    }
-    val options = BitmapFactory.Options().apply { inSampleSize = sample }
-    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
-}
-
-private const val MAX_DECODE_SIDE = 1600

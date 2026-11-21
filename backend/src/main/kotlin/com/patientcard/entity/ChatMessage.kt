@@ -23,4 +23,13 @@ class ChatMessage(
 
     @Column(name = "model_name", length = 150)
     var modelName: String? = null,
-) : CreatedEntity()
+
+    /** Comma-separated ids of images attached to a user message. */
+    @Column(name = "image_ids", length = 1000)
+    var imageIds: String? = null,
+) : CreatedEntity() {
+    fun attachedImageIds(): List<UUID> = imageIds
+        ?.split(',')
+        ?.mapNotNull { runCatching { UUID.fromString(it.trim()) }.getOrNull() }
+        .orEmpty()
+}

@@ -69,6 +69,9 @@ interface ApiService {
         @Query("size") size: Int = 50,
     ): PageDto<ImageDto>
 
+    @GET("app/images/{id}")
+    suspend fun image(@Path("id") id: String): ImageDto
+
     @GET
     suspend fun list(
         @Url url: String,

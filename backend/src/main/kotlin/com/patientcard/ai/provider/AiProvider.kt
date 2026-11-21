@@ -22,10 +22,20 @@ data class PatientContext(
     val truncated: Boolean,
 )
 
+/** Image attached by the patient to a chat message. */
+data class AiChatImage(
+    val imageNumber: Long,
+    val mimeType: String,
+    val title: String?,
+    /** Only populated for providers that actually inspect pixels. */
+    val bytes: ByteArray?,
+)
+
 data class AiChatCommand(
     val question: String,
     val context: PatientContext,
     val history: List<AiHistoryMessage>,
+    val images: List<AiChatImage> = emptyList(),
 )
 
 data class AiAnswer(

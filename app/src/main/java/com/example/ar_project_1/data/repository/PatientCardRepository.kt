@@ -24,23 +24,20 @@ import com.example.ar_project_1.data.resource.RecordRequestBuilder
 import com.example.ar_project_1.data.resource.ResourceType
 import com.example.ar_project_1.data.session.SessionManager
 import com.example.ar_project_1.data.upload.ContentUriRequestBody
+import com.example.ar_project_1.data.upload.ImagePreparer
 import com.example.ar_project_1.data.upload.PickedFile
-import com.google.gson.JsonNull
 import com.google.gson.JsonObject
-import com.google.gson.JsonPrimitive
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.HttpException
 import java.io.IOException
-import java.math.BigDecimal
-import java.time.LocalDate
 
 class PatientCardRepository(
     private val contentResolver: ContentResolver,
     private val api: ApiService,
     private val sessionManager: SessionManager,
+    private val imagePreparer: ImagePreparer,
 ) {
 
     suspend fun login(email: String, password: String): AuthResponse = call {
@@ -65,7 +62,7 @@ class PatientCardRepository(
     suspend fun patient(): PatientDto = call { api.patient() }
 
     suspend fun updatePatient(values: Map<String, String>): PatientDto = call {
-        api.updatePatient(buildPatientRequest(values))
+        api.updatePatient(PatientRequestBuilder.build(values))
     }
 
     suspend fun list(
@@ -150,6 +147,8 @@ class PatientCardRepository(
         api.images(page, size)
     }
 
+    suspend fun image(id: String): ImageDto = call { api.image(id) }
+
     suspend fun uploadImage(
         picked: PickedFile,
         title: String?,
@@ -158,8 +157,9 @@ class PatientCardRepository(
         symptomId: String?,
         capturedAt: String?,
     ): ImageDto = call {
+        val prepared = imagePreparer.prepare(picked)
         api.uploadImage(
-            file = multipartFile(picked),
+            file = multipartFile(prepared),
             title = title?.takeIf { it.isNotBlank() }?.text(),
             description = description?.takeIf { it.isNotBlank() }?.text(),
             category = category.text(),
@@ -176,8 +176,12 @@ class PatientCardRepository(
 
     suspend fun analyzeImage(id: String): JsonObject = call { api.analyzeImage(id) }
 
-    suspend fun chat(message: String, conversationId: String? = null): ChatResponse = call {
-        api.chat(ChatRequest(conversationId = conversationId, message = message))
+    suspend fun chat(
+        message: String,
+        conversationId: String? = null,
+        imageIds: List<String> = emptyList(),
+    ): ChatResponse = call {
+        api.chat(ChatRequest(conversationId = conversationId, message = message, imageIds = imageIds))
     }
 
     @Volatile
@@ -203,53 +207,6 @@ class PatientCardRepository(
 
     private fun String.text() = toRequestBody(TEXT_PLAIN)
 
-    private fun buildPatientRequest(values: Map<String, String>): JsonObject {
-        val json = JsonObject()
-        fun text(key: String) {
-            val value = values[key]?.trim().orEmpty()
-            json.add(key, if (value.isEmpty()) JsonNull.INSTANCE else JsonPrimitive(value))
-        }
-        text("firstName")
-        text("lastName")
-        text("notes")
-
-        val date = values["dateOfBirth"]?.trim().orEmpty()
-        if (date.isEmpty()) {
-            json.add("dateOfBirth", JsonNull.INSTANCE)
-        } else {
-            if (!DATE_PATTERN.matches(date)) {
-                throw IllegalArgumentException("Data urodzenia musi mieć format RRRR-MM-DD.")
-            }
-            val parsed = runCatching { LocalDate.parse(date) }.getOrNull()
-                ?: throw IllegalArgumentException("Data urodzenia jest nieprawidłowa.")
-            if (parsed.isAfter(LocalDate.now())) {
-                throw IllegalArgumentException("Data urodzenia nie może być w przyszłości.")
-            }
-            json.add("dateOfBirth", JsonPrimitive(date))
-        }
-
-        fun enumValue(key: String) {
-            val value = values[key]?.trim().orEmpty()
-            json.add(key, if (value.isEmpty()) JsonNull.INSTANCE else JsonPrimitive(value))
-        }
-        enumValue("sex")
-        enumValue("bloodType")
-
-        fun decimal(key: String) {
-            val value = values[key]?.trim().orEmpty().replace(',', '.')
-            if (value.isEmpty()) {
-                json.add(key, JsonNull.INSTANCE)
-            } else {
-                val number = value.toBigDecimalOrNull()
-                    ?: throw IllegalArgumentException("Pole musi być liczbą.")
-                json.add(key, JsonPrimitive(number))
-            }
-        }
-        decimal("heightCm")
-        decimal("weightKg")
-        return json
-    }
-
     private suspend fun <T> call(block: suspend () -> T): T {
         try {
             return block()
@@ -269,7 +226,6 @@ class PatientCardRepository(
 
     companion object {
         private val TEXT_PLAIN = "text/plain".toMediaType()
-        private val DATE_PATTERN = Regex("^\\d{4}-\\d{2}-\\d{2}$")
         const val MAX_FILE_BYTES = 25L * 1024 * 1024
     }
 }

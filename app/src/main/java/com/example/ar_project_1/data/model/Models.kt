@@ -108,6 +108,7 @@ data class ImageDto(
 data class ChatRequest(
     val conversationId: String? = null,
     val message: String,
+    val imageIds: List<String> = emptyList(),
 )
 
 data class AiSourceDto(
@@ -150,6 +151,7 @@ data class MessageDto(
     val modelName: String? = null,
     val createdAt: String? = null,
     val sources: List<AiSourceDto> = emptyList(),
+    val imageIds: List<String>? = null,
 )
 
 data class ConversationDetailDto(

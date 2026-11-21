@@ -27,7 +27,7 @@ class FileStorageService(appProperties: AppProperties) {
 
     private val logger = LoggerFactory.getLogger(javaClass)
     private val properties = appProperties.storage
-    private val root: Path = Path.of(properties.root).toAbsolutePath().normalize()
+    private val root: Path = resolveRoot(properties.root)
 
     @PostConstruct
     fun initialize() {
@@ -104,6 +104,23 @@ class FileStorageService(appProperties: AppProperties) {
                 }
             })
         }
+    }
+
+    /**
+     * A relative root (default `../storage`) depends on the working directory, so
+     * running from the IDE (repo root) and from `backend/` used to write into
+     * different folders. Prefer the repository's `storage/` folder (marked with
+     * `.gitkeep`) when it can be found above the working directory.
+     */
+    private fun resolveRoot(configured: String): Path {
+        val path = Path.of(configured)
+        if (path.isAbsolute) return path.normalize()
+        val cwd = Path.of("").toAbsolutePath()
+        val projectStorage = generateSequence(cwd) { it.parent }
+            .take(4)
+            .map { it.resolve(path.fileName.toString()) }
+            .firstOrNull { Files.exists(it.resolve(".gitkeep")) }
+        return (projectStorage ?: cwd.resolve(path)).toAbsolutePath().normalize()
     }
 
     fun resolveSafe(storageKey: String): Path {

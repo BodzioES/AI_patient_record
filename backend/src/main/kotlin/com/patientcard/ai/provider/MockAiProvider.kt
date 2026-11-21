@@ -36,6 +36,10 @@ class MockAiProvider(private val properties: AiProperties) : AiProvider {
             appendLine("Nie uruchomiono LM Studio ani żadnego modelu językowego. Poniższa odpowiedź jest demonstracyjna.")
             appendLine()
             appendLine("Pytanie: $question")
+            if (command.images.isNotEmpty()) {
+                appendLine("Dołączone zdjęcia: " + command.images.joinToString { "#${it.imageNumber}" })
+                appendLine("(MOCK nie ogląda zdjęć — przełącz AI_PROVIDER=lmstudio, aby model je opisał.)")
+            }
             appendLine()
             appendLine("Kontekst przekazany do dostawcy (skrót):")
             appendLine(contextPreview.ifBlank { "(brak kontekstu)" })

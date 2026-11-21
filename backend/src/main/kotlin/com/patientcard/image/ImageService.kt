@@ -16,6 +16,7 @@ import com.patientcard.repository.SymptomRepository
 import com.patientcard.security.UserPrincipal
 import com.patientcard.storage.FileStorageService
 import com.patientcard.storage.FileTypeValidator
+import com.patientcard.storage.ImageDimensions
 import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -70,6 +71,7 @@ class ImageService(
         val imageNumber = allocateImageNumber(patientId)
         val stored = fileStorageService.storeImage(patientId, file, type)
         fileStorageService.deleteOnRollback(stored.storageKey)
+        val dimensions = ImageDimensions.read(fileStorageService.load(stored.storageKey))
         val image = MedicalImage(
             patientId = patientId,
             symptomId = symptomId,
@@ -82,6 +84,8 @@ class ImageService(
             storageKey = stored.storageKey,
             mimeType = type.mimeType,
             fileSizeBytes = stored.sizeBytes,
+            widthPx = dimensions?.first,
+            heightPx = dimensions?.second,
             sha256Checksum = stored.sha256,
             capturedAt = capturedAt,
             uploadedAt = Instant.now(),

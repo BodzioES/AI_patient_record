@@ -58,6 +58,7 @@ interface ChatMessageRepository : JpaRepository<ChatMessage, UUID> {
 
 interface AiMessageSourceRepository : JpaRepository<AiMessageSource, UUID> {
     fun findAllByMessageId(messageId: UUID): List<AiMessageSource>
+    fun findAllByMessageIdIn(messageIds: Collection<UUID>): List<AiMessageSource>
 }
 
 interface AiProcessingJobRepository : JpaRepository<AiProcessingJob, UUID>

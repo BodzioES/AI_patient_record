@@ -2,7 +2,6 @@ package com.patientcard.ai
 
 import com.patientcard.entity.AiSourceType
 import com.patientcard.entity.ChatRole
-import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 import java.time.Instant
 import java.util.UUID
@@ -10,9 +9,13 @@ import java.util.UUID
 data class ChatRequest(
     val conversationId: UUID? = null,
 
-    @field:NotBlank(message = "Treść wiadomości jest wymagana.")
+    /** May be blank when at least one image is attached. */
     @field:Size(max = 4000, message = "Wiadomość może mieć maksymalnie 4000 znaków.")
     val message: String = "",
+
+    /** Ids of images (already uploaded via /app/images) attached to this message. */
+    @field:Size(max = 4, message = "Do jednej wiadomości można dołączyć maksymalnie 4 zdjęcia.")
+    val imageIds: List<UUID> = emptyList(),
 )
 
 data class AiStatusResponse(
@@ -55,6 +58,7 @@ data class MessageResponse(
     val modelName: String?,
     val createdAt: Instant,
     val sources: List<AiSourceResponse>,
+    val imageIds: List<UUID> = emptyList(),
 )
 
 data class ConversationDetailResponse(

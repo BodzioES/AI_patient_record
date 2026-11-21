@@ -514,11 +514,16 @@ Informuje, który dostawca jest aktywny. Aplikacja używa tego do etykiet w UI.
 ```json
 {
   "conversationId": null,
-  "message": "Jakie przyjmuję leki i jakie mam objawy?"
+  "message": "Jakie przyjmuję leki i jakie mam objawy?",
+  "imageIds": []
 }
 ```
 
-`conversationId` opcjonalne; brak tworzy nową rozmowę. `message`: 1–4000 znaków.
+`conversationId` opcjonalne; brak tworzy nową rozmowę. `message`: do 4000 znaków.
+`imageIds` (opcjonalne, maks. 4): UUID zdjęć wcześniej wysłanych przez `POST /app/images`,
+należących do pacjenta. Przy dołączonym zdjęciu `message` może być puste. Model LM Studio
+dostaje zdjęcia jako treść multimodalną; wiadomość użytkownika w
+`GET /conversations/{id}` zwraca je w polu `imageIds`.
 
 Odpowiedź:
 

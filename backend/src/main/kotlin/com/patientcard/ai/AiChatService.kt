@@ -5,6 +5,7 @@ import com.patientcard.ai.context.PatientContextProvider
 import com.patientcard.ai.provider.AiChatCommand
 import com.patientcard.ai.provider.AiHistoryMessage
 import com.patientcard.ai.provider.AiProvider
+import com.patientcard.common.BadRequestException
 import com.patientcard.common.NotFoundException
 import com.patientcard.common.PageResponse
 import com.patientcard.entity.AiMessageSource
@@ -31,17 +32,21 @@ class AiChatService(
     private val messageRepository: ChatMessageRepository,
     private val sourceRepository: AiMessageSourceRepository,
     private val currentPatientService: CurrentPatientService,
+    private val attachmentLoader: ChatAttachmentLoader,
 ) {
 
     @Transactional
     fun chat(principal: UserPrincipal, request: ChatRequest): ChatResponse {
         val patientId = currentPatientService.patientId(principal)
+        val question = request.message.trim()
+        val images = attachmentLoader.findOwned(patientId, request.imageIds)
+        if (question.isEmpty() && images.isEmpty()) {
+            throw BadRequestException("Napisz wiadomość albo dołącz zdjęcie.")
+        }
+        val storedQuestion = question.ifEmpty { IMAGE_ONLY_MESSAGE }
         val conversation = if (request.conversationId == null) {
             conversationRepository.save(
-                ChatConversation(
-                    patientId = patientId,
-                    title = request.message.trim().take(80).ifBlank { "Nowa rozmowa" },
-                ),
+                ChatConversation(patientId = patientId, title = storedQuestion.take(80)),
             )
         } else {
             conversationRepository.findByIdAndPatientId(request.conversationId, patientId)
@@ -51,12 +56,13 @@ class AiChatService(
         val history = messageRepository.findAllByConversationIdOrderByCreatedAtAsc(conversation.id!!)
             .takeLast(HISTORY_LIMIT)
             .map { AiHistoryMessage(role = it.role.name, content = it.content) }
-        val context = contextProvider.buildContext(patientId, request.message)
+        val context = contextProvider.buildContext(patientId, storedQuestion)
         val answer = provider.chat(
             AiChatCommand(
-                question = request.message.trim(),
+                question = storedQuestion,
                 context = context,
                 history = history,
+                images = attachmentLoader.toProviderImages(images),
             ),
         )
 
@@ -64,7 +70,8 @@ class AiChatService(
             ChatMessage(
                 conversationId = conversation.id!!,
                 role = ChatRole.USER,
-                content = request.message.trim(),
+                content = storedQuestion,
+                imageIds = images.takeIf { it.isNotEmpty() }?.joinToString(",") { it.id.toString() },
             ),
         )
         val assistantMessage = messageRepository.save(
@@ -140,6 +147,8 @@ class AiChatService(
         val conversation = conversationRepository.findByIdAndPatientId(id, patientId)
             ?: throw NotFoundException("Nie znaleziono rozmowy.")
         val messages = messageRepository.findAllByConversationIdOrderByCreatedAtAsc(id)
+        val sourcesByMessage = sourceRepository.findAllByMessageIdIn(messages.mapNotNull { it.id })
+            .groupBy { it.messageId }
         return ConversationDetailResponse(
             id = conversation.id!!,
             title = conversation.title,
@@ -152,7 +161,8 @@ class AiChatService(
                     content = message.content,
                     modelName = message.modelName,
                     createdAt = message.createdAt,
-                    sources = sourceRepository.findAllByMessageId(message.id!!).map { it.toSourceResponse() },
+                    sources = sourcesByMessage[message.id].orEmpty().map { it.toSourceResponse() },
+                    imageIds = message.attachedImageIds(),
                 )
             },
         )
@@ -174,5 +184,6 @@ class AiChatService(
 
     companion object {
         private const val HISTORY_LIMIT = 20
+        private const val IMAGE_ONLY_MESSAGE = "Co widać na dołączonym zdjęciu?"
     }
 }

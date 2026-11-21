@@ -58,7 +58,9 @@ services:
       # Backend musi być osiągalny z telefonu/emulatora w prywatnej sieci Wi-Fi.
       - "8080:8080"
     volumes:
-      - patientcard_storage:/data/storage
+      # Pliki (zdjęcia, dokumenty) trafiają do folderu ./storage w repozytorium,
+      # więc są widoczne na dysku i przetrwają przebudowę kontenera.
+      - ./storage:/data/storage
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 10s
@@ -68,4 +70,3 @@ services:
 
 volumes:
   patientcard_pgdata:
-  patientcard_storage:

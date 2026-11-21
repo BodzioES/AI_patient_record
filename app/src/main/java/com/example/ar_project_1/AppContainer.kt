@@ -9,6 +9,8 @@ import com.example.ar_project_1.data.repository.PatientCardRepository
 import com.example.ar_project_1.data.session.SecureSessionStore
 import com.example.ar_project_1.data.session.SessionManager
 import com.example.ar_project_1.data.upload.FileSaver
+import com.example.ar_project_1.data.upload.ImagePreparer
+import com.example.ar_project_1.ui.common.RemoteImageLoader
 import com.google.gson.GsonBuilder
 
 class AppContainer(context: Context) {
@@ -19,11 +21,14 @@ class AppContainer(context: Context) {
     val uiPreferences = UiPreferences(appContext)
     val serverAutoConfig = ServerAutoConfig(isEmulator())
     private val apiClient = ApiClient(sessionManager, gson)
+    val imagePreparer = ImagePreparer(appContext)
     val repository = PatientCardRepository(
         contentResolver = appContext.contentResolver,
         api = apiClient.service,
         sessionManager = sessionManager,
+        imagePreparer = imagePreparer,
     )
+    val imageLoader = RemoteImageLoader(repository)
     val fileSaver = FileSaver(appContext)
 
     private fun isEmulator(): Boolean =
