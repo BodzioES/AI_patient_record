@@ -25,4 +25,6 @@ data class AiProperties(
     val maxVisionImageBytes: Int = 10_485_760,
     val temperature: Double = 0.2,
     val maxOutputTokens: Int = 2048,
+    /** Strefa czasowa, w której daty są pokazywane modelowi (pacjent widzi czas lokalny). */
+    val timeZone: String = "Europe/Warsaw",
 )

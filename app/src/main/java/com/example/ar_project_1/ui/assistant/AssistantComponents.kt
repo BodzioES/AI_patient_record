@@ -1,7 +1,6 @@
 package com.example.ar_project_1.ui.assistant
 
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -114,7 +113,7 @@ internal fun ChatInputBar(
     viewModel: AssistantViewModel,
 ) {
     val context = LocalContext.current
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             runCatching { context.contentResolver.describe(uri) }
                 .onSuccess(viewModel::addAttachment)
@@ -148,7 +147,7 @@ internal fun ChatInputBar(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(
                     onClick = {
-                        picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        picker.launch(arrayOf("image/*"))
                     },
                     enabled = state.canAttach,
                 ) {

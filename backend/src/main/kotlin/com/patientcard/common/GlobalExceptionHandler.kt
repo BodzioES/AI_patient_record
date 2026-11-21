@@ -2,7 +2,6 @@ package com.patientcard.common
 
 import org.slf4j.LoggerFactory
 import org.springframework.dao.DataIntegrityViolationException
-import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.HttpStatusCode
 import org.springframework.http.ProblemDetail

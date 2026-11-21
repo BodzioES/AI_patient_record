@@ -1,6 +1,8 @@
 package com.example.ar_project_1.ui.common
 
+import android.graphics.BitmapFactory
 import android.graphics.ImageDecoder
+import android.util.Log
 import android.util.LruCache
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
@@ -67,18 +69,36 @@ class RemoteImageLoader(private val repository: PatientCardRepository) {
         cache.snapshot().keys.filter { it.startsWith("$id@") }.forEach(cache::remove)
     }
 
-    private fun decode(bytes: ByteArray, maxSide: Int): ImageBitmap {
-        val source = ImageDecoder.createSource(ByteBuffer.wrap(bytes))
-        return ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
-            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-            val longest = maxOf(info.size.width, info.size.height)
-            if (longest > maxSide) decoder.setTargetSampleSize(longest / maxSide)
-        }.asImageBitmap()
+    private fun decode(bytes: ByteArray, maxSide: Int): ImageBitmap =
+        try {
+            val source = ImageDecoder.createSource(ByteBuffer.wrap(bytes))
+            ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                val longest = maxOf(info.size.width, info.size.height)
+                if (longest > maxSide) decoder.setTargetSampleSize(longest / maxSide)
+            }.asImageBitmap()
+        } catch (e: Exception) {
+            // ImageDecoder odrzuca część plików (np. JPEG z dużymi segmentami metadanych
+            // C2PA z generatorów AI). BitmapFactory jest bardziej tolerancyjny.
+            Log.w(TAG, "ImageDecoder failed, falling back to BitmapFactory", e)
+            decodeWithBitmapFactory(bytes, maxSide)
+        }
+
+    private fun decodeWithBitmapFactory(bytes: ByteArray, maxSide: Int): ImageBitmap {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxSide) sample *= 2
+        val options = BitmapFactory.Options().apply { inSampleSize = sample }
+        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+            ?: throw IllegalStateException("Nie można zdekodować zdjęcia (${bytes.size} B).")
+        return bitmap.asImageBitmap()
     }
 
     private fun key(id: String, maxSide: Int) = "$id@$maxSide"
 
     companion object {
+        private const val TAG = "RemoteImage"
         const val THUMBNAIL = 320
         const val FULL = 1600
         private const val CACHE_BYTES = 48 * 1024 * 1024
@@ -103,7 +123,8 @@ fun RemoteImage(
                 bitmap = loader.load(imageId, maxSide)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                android.util.Log.w("RemoteImage", "Loading image $imageId failed", e)
                 failed = true
             }
         }

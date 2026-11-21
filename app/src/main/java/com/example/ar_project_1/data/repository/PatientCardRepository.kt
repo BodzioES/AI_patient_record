@@ -1,5 +1,7 @@
 package com.example.ar_project_1.data.repository
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import android.content.ContentResolver
 import com.example.ar_project_1.data.api.ApiErrorParser
 import com.example.ar_project_1.data.api.ApiService
@@ -138,7 +140,7 @@ class PatientCardRepository(
     }
 
     suspend fun downloadDocument(id: String): ByteArray = call {
-        api.downloadDocument(id).use { it.bytes() }
+        withContext(Dispatchers.IO) { api.downloadDocument(id).use { it.bytes() } }
     }
 
     suspend fun deleteDocument(id: String) = call { api.delete("app/documents/$id") }
@@ -169,7 +171,7 @@ class PatientCardRepository(
     }
 
     suspend fun downloadImage(id: String): ByteArray = call {
-        api.downloadImage(id).use { it.bytes() }
+        withContext(Dispatchers.IO) { api.downloadImage(id).use { it.bytes() } }
     }
 
     suspend fun deleteImage(id: String) = call { api.delete("app/images/$id") }

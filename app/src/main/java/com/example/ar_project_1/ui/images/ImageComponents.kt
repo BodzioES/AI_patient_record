@@ -1,7 +1,6 @@
 package com.example.ar_project_1.ui.images
 
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -126,7 +125,7 @@ internal fun UploadImageDialog(
     var pickError by remember { mutableStateOf<String?>(null) }
     var form by remember { mutableStateOf(ImageUploadForm()) }
 
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             runCatching { context.contentResolver.describe(uri) }
                 .onSuccess {
@@ -166,14 +165,14 @@ internal fun UploadImageDialog(
             ) {
                 OutlinedButton(
                     onClick = {
-                        picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        picker.launch(arrayOf("image/*"))
                     },
                     enabled = !uploading,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Icon(Icons.Default.UploadFile, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text(if (picked == null) "Wybierz zdjęcie z galerii" else "Zmień zdjęcie")
+                    Text(if (picked == null) "Wybierz zdjęcie" else "Zmień zdjęcie")
                 }
                 picked?.let {
                     Text(

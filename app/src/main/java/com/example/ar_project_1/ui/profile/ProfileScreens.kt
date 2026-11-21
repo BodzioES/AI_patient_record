@@ -28,7 +28,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.ar_project_1.AppContainer
-import com.example.ar_project_1.data.model.PatientDto
 import com.example.ar_project_1.data.resource.ResourceCatalog
 import com.example.ar_project_1.ui.common.ErrorBanner
 import com.example.ar_project_1.ui.common.FormFieldInput

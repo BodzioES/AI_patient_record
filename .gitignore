@@ -6,6 +6,7 @@
 /backend/build
 /backend/.gradle
 /backend/.kotlin
+/backend/test-report
 /.kotlin
 /captures
 .externalNativeBuild

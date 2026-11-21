@@ -4,6 +4,7 @@ import com.patientcard.ai.provider.AiContextSource
 import com.patientcard.ai.provider.PatientContext
 import com.patientcard.config.AiProperties
 import com.patientcard.entity.AiSourceType
+import com.patientcard.entity.MeasurementType
 import com.patientcard.entity.PatientProfile
 import com.patientcard.repository.AllergyRepository
 import com.patientcard.repository.AppointmentRepository
@@ -16,19 +17,21 @@ import com.patientcard.repository.MedicationRepository
 import com.patientcard.repository.PatientProfileRepository
 import com.patientcard.repository.SymptomRepository
 import org.springframework.data.domain.PageRequest
+import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import java.time.LocalDate
 import java.time.Period
-import java.time.ZoneOffset
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
 /**
- * Builds a deliberately small, question-specific patient context. It uses
- * deterministic keyword routing and precise repository queries; semantic
- * search / OCR is intentionally deferred to later stages.
+ * Builds a deliberately small, question-specific patient context. Allergies,
+ * medications and conditions are always included (safety-critical); other
+ * categories are chosen by deterministic keyword routing. Semantic search /
+ * OCR is intentionally deferred to later stages.
  */
 @Service
 class DefaultPatientContextProvider(
@@ -44,6 +47,8 @@ class DefaultPatientContextProvider(
     private val imageRepository: MedicalImageRepository,
     private val properties: AiProperties,
 ) : PatientContextProvider {
+
+    private val zone: ZoneId = ZoneId.of(properties.timeZone)
 
     private enum class Category {
         ALLERGIES, MEDICATIONS, SYMPTOMS, MEASUREMENTS, APPOINTMENTS, CONDITIONS, DOCUMENTS, IMAGES,
@@ -138,7 +143,12 @@ class DefaultPatientContextProvider(
         }
 
         if (Category.MEASUREMENTS in categories) {
-            val measurements = measurementRepository.findAllByPatientIdOrderByMeasuredAtDesc(patientId, PageRequest.of(0, limit))
+            // Limit liczony osobno dla każdego typu, żeby seria jednego pomiaru
+            // (np. ciśnienia) nie wypychała z kontekstu pozostałych (np. glukozy).
+            val newestFirst = Sort.by(Sort.Direction.DESC, "measuredAt")
+            val measurements = MeasurementType.entries.flatMap { type ->
+                measurementRepository.findAllByPatientIdAndType(patientId, type, PageRequest.of(0, limit, newestFirst)).content
+            }
             if (measurements.isNotEmpty()) {
                 append("POMIARY:\n")
                 measurements.forEach { m ->
@@ -261,7 +271,7 @@ class DefaultPatientContextProvider(
 
         if (matches("alerg", "uczul")) categories += Category.ALLERGIES
         if (matches("lek", "medyk", "medic", "dawk", "dose", "tablet", "przyjmowan", "suplement")) categories += Category.MEDICATIONS
-        if (matches("objaw", "ból", "bol ", "bólu", "pain", "skór", "skor", "ran", "swęd", "swed", "kaszl", "gorączk", "goraczk")) {
+        if (matches("objaw", "ból", "bol", "pain", "skór", "skor", "ran", "swęd", "swed", "kasz", "gorączk", "goraczk", "duszn", "zawrot")) {
             categories += Category.SYMPTOMS
         }
         if (matches("pomiar", "ciśn", "cisn", "blood", "temperatur", "glukoz", "wag", "heart", "tętno", "tetno", "saturac", "oxygen")) {
@@ -275,13 +285,17 @@ class DefaultPatientContextProvider(
         if (matches("zdjęc", "zdjec", "image", "photo", "obraz", "porówn", "porown", "fotograf")) categories += Category.IMAGES
 
         if (categories.isEmpty()) {
-            categories += Category.ALLERGIES
-            categories += Category.MEDICATIONS
             categories += Category.SYMPTOMS
             categories += Category.MEASUREMENTS
             categories += Category.APPOINTMENTS
             categories += Category.DOCUMENTS
         }
+        // Dane krytyczne dla bezpieczeństwa są zawsze w kontekście: pytanie o lek
+        // po nazwie (np. "ibuprofen") musi widzieć alergie, a pytanie o chorobę
+        // (np. "cukrzyca") — listę schorzeń i leków.
+        categories += Category.ALLERGIES
+        categories += Category.MEDICATIONS
+        categories += Category.CONDITIONS
         if (Category.SYMPTOMS in categories && matches("zdjęc", "zdjec", "image", "photo", "obraz", "fotograf")) {
             categories += Category.IMAGES
         }
@@ -295,5 +309,9 @@ class DefaultPatientContextProvider(
     }
 
     private fun formatInstant(instant: Instant): String =
-        DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(instant.atZone(ZoneOffset.UTC))
+        DATE_TIME.format(instant.atZone(zone))
+
+    private companion object {
+        val DATE_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+    }
 }

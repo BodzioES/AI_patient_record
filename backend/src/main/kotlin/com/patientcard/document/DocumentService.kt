@@ -1,15 +1,16 @@
 package com.patientcard.document
 
+import com.patientcard.common.BadRequestException
 import com.patientcard.common.NotFoundException
 import com.patientcard.common.PageResponse
 import com.patientcard.entity.DocumentProcessingStatus
+import com.patientcard.entity.DocumentType
 import com.patientcard.entity.MedicalDocument
 import com.patientcard.patient.CurrentPatientService
 import com.patientcard.repository.MedicalDocumentRepository
 import com.patientcard.security.UserPrincipal
 import com.patientcard.storage.FileStorageService
 import com.patientcard.storage.FileTypeValidator
-import com.patientcard.storage.StoredFile
 import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -55,13 +56,15 @@ class DocumentService(
         documentDate: LocalDate?,
     ): DocumentResponse {
         val patientId = currentPatientService.patientId(principal)
+        val normalizedType = normalizeDocumentType(documentType)
+        val normalizedTitle = normalizeTitle(title)
         val type = fileTypeValidator.validateDocument(file)
         val stored = fileStorageService.storeDocument(patientId, file, type)
         fileStorageService.deleteOnRollback(stored.storageKey)
         val document = MedicalDocument(
             patientId = patientId,
-            documentType = documentType.trim().uppercase(),
-            title = title.trim(),
+            documentType = normalizedType,
+            title = normalizedTitle,
             description = description,
             originalFilename = sanitizeFilename(file.originalFilename),
             storageKey = stored.storageKey,
@@ -78,8 +81,8 @@ class DocumentService(
     @Transactional
     fun update(principal: UserPrincipal, id: UUID, request: DocumentUpdateRequest): DocumentResponse {
         val document = findOwned(principal, id)
-        document.documentType = request.documentType.trim().uppercase()
-        document.title = request.title.trim()
+        document.documentType = normalizeDocumentType(request.documentType)
+        document.title = normalizeTitle(request.title)
         document.description = request.description
         document.documentDate = request.documentDate
         return document.toResponse()
@@ -103,6 +106,28 @@ class DocumentService(
         val patientId = currentPatientService.patientId(principal)
         return documentRepository.findByIdAndPatientId(id, patientId)
             ?: throw NotFoundException("Nie znaleziono dokumentu.")
+    }
+
+    private fun normalizeDocumentType(raw: String): String {
+        val value = raw.trim().uppercase()
+        if (DocumentType.entries.none { it.name == value }) {
+            throw BadRequestException(
+                "Nieprawidłowy typ dokumentu.",
+                mapOf("documentType" to "Dozwolone: ${DocumentType.entries.joinToString()}"),
+            )
+        }
+        return value
+    }
+
+    private fun normalizeTitle(raw: String): String {
+        val value = raw.trim()
+        if (value.isEmpty() || value.length > 200) {
+            throw BadRequestException(
+                "Nieprawidłowy tytuł dokumentu.",
+                mapOf("title" to "Tytuł jest wymagany i może mieć maksymalnie 200 znaków."),
+            )
+        }
+        return value
     }
 
     private fun sanitizeFilename(filename: String?): String {
