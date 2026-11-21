@@ -49,6 +49,7 @@ services:
       LM_STUDIO_MODEL_VERSION: ${LM_STUDIO_MODEL_VERSION:-}
       AI_REASONING_EFFORT: ${AI_REASONING_EFFORT:-none}
       AI_MAX_OUTPUT_TOKENS: ${AI_MAX_OUTPUT_TOKENS:-2048}
+      AI_TIME_ZONE: ${AI_TIME_ZONE:-Europe/Warsaw}
       MAX_FILE_SIZE_BYTES: ${MAX_FILE_SIZE_BYTES:-26214400}
     extra_hosts:
       # Na Docker Desktop (Windows/macOS) wpis istnieje domyślnie; na Linuksie
